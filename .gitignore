@@ -1,7 +1,3 @@
-# 다운로드 폴더
-Downloads/
-Downloads2/
-
 # Node.js 관련 파일
 node_modules/
 npm-debug.log
