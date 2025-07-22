@@ -37,7 +37,7 @@ npm install
 `.env`라는 이름의 새 파일을 생성하고, 아래 내용을 복사해서 붙여넣으세요:
 
 ```env
-KIDSNOTE_API_URL=https://www.kidsnote.com/api/v1_2/children/4442113/reports/?page_size=5000&tz=Asia%2FSeoul&center_id=51810&cls=1140413&child=4442113
+KIDSNOTE_API_URL=https://www.kidsnote.com/api/v1_2/children/추가 API 주소
 KIDSNOTE_COOKIE=_gcl_au=... (한 줄 전체 입력, 공백 없이)
 KIDSNOTE_BASE_DIR=kids_note_images
 KIDSNOTE_START_DATE=2025-01-01
