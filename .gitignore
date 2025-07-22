@@ -5,6 +5,7 @@ yarn-debug.log
 yarn-error.log
 package-lock.json
 yarn.lock
+kids_note_images/
 
 # JSON 데이터 파일 (민감한 개인 정보가 포함될 수 있음)
 *.json
