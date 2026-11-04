@@ -50,6 +50,8 @@ static class SetupMain
         Directory.CreateDirectory(Install.Dir);
         using (var s = Assembly.GetExecutingAssembly().GetManifestResourceStream(Install.ExeName))
         using (var o = File.Create(Install.Exe)) s.CopyTo(o);
+        using (var s = Assembly.GetExecutingAssembly().GetManifestResourceStream("app.ico"))
+        using (var o = File.Create(Install.IconFile)) s.CopyTo(o);
         say(0.75f, "바로가기를 만드는 중…");
         Install.Register(desktop);
         say(1f, "마무리하는 중…");

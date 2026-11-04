@@ -18,7 +18,7 @@ if ($LASTEXITCODE) { exit $LASTEXITCODE }
 # 2) 설치 파일 (프로그램을 품고 있음)
 $setup = Join-Path $out '키즈노트 다운로더 설치.exe'
 & $csc (@('/nologo', '/target:winexe', '/codepage:65001', '/optimize+', "/out:$setup", "/win32icon:$d\app.ico",
-  "/resource:$exe,KidsNoteDownloader.exe", "/resource:$d\icon.png,icon.png") + $refs +
+  "/resource:$exe,KidsNoteDownloader.exe", "/resource:$d\icon.png,icon.png", "/resource:$d\app.ico,app.ico") + $refs +
   @("$d\Setup.cs", "$d\Install.cs", "$d\ModernSetup.cs"))
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
