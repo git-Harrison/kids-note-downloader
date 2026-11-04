@@ -9,7 +9,8 @@ using Microsoft.Win32;
 static class Install
 {
     public const string Name = "키즈노트 다운로더";
-    public const string Version = "1.2.2";
+    public const string Version = "1.2.3";
+    public const string AppId = "GitHarrison.KidsNoteDownloader";
     public const string ExeName = "KidsNoteDownloader.exe";
     const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\KidsNoteDownloader";
 
@@ -66,6 +67,7 @@ static class Install
         s.TargetPath = Exe; s.WorkingDirectory = Dir; s.IconLocation = IconOf + ",0";
         s.Description = "키즈노트 사진·동영상 다운로더";
         s.Save();
+        TaskbarId.ApplyToShortcut(lnk, AppId);   // 작업 표시줄이 이 바로가기 아이콘을 쓰게
     }
 
     [DllImport("shell32.dll")] static extern void SHChangeNotify(int eventId, int flags, IntPtr a, IntPtr b);

@@ -12,14 +12,14 @@ $refs = '/r:System.Windows.Forms.dll', '/r:System.Drawing.dll', '/r:System.Core.
 # 1) 프로그램
 $exe = Join-Path $out 'KidsNoteDownloader.exe'
 & $csc (@('/nologo', '/target:winexe', '/codepage:65001', '/optimize+', "/out:$exe", "/win32icon:$d\app.ico") + $refs +
-  @('/r:System.Web.Extensions.dll', '/r:System.Management.dll', "/resource:$d\ui.html,ui.html", "/resource:$d\icon.png,icon.png", "$d\KidsNote.cs", "$d\Install.cs"))
+  @('/r:System.Web.Extensions.dll', '/r:System.Management.dll', "/resource:$d\ui.html,ui.html", "/resource:$d\icon.png,icon.png", "/resource:$d\app.ico,app.ico", "$d\KidsNote.cs", "$d\Install.cs", "$d\TaskbarId.cs"))
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
 # 2) 설치 파일 (프로그램을 품고 있음)
 $setup = Join-Path $out '키즈노트 다운로더 설치.exe'
 & $csc (@('/nologo', '/target:winexe', '/codepage:65001', '/optimize+', "/out:$setup", "/win32icon:$d\app.ico",
   "/resource:$exe,KidsNoteDownloader.exe", "/resource:$d\icon.png,icon.png", "/resource:$d\app.ico,app.ico") + $refs +
-  @("$d\Setup.cs", "$d\Install.cs", "$d\ModernSetup.cs"))
+  @("$d\Setup.cs", "$d\Install.cs", "$d\ModernSetup.cs", "$d\TaskbarId.cs"))
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
 # 3) zip

@@ -269,10 +269,12 @@ class App
         new Thread(ConnectBrowser) { IsBackground = true }.Start();
 
         // 화면이 닫히면(신호가 끊기면) 종료
-        var start = DateTime.Now;
+        var start = DateTime.Now; IntPtr tagged = IntPtr.Zero;
         while (true)
         {
-            Thread.Sleep(1000);
+            Thread.Sleep(tagged == IntPtr.Zero ? 200 : 1000);
+            IntPtr ui = FindUi();
+            if (ui != IntPtr.Zero && ui != tagged) { TaskbarId.ApplyToWindow(ui, Install.AppId, Install.Exe, (File.Exists(Install.IconFile) ? Install.IconFile : Install.Exe) + ",0", Install.Name); tagged = ui; }
             double quiet = (DateTime.Now - lastSeen).TotalSeconds;
             if (seen && bye && quiet > 3) break;
             if (seen && quiet > 20) break;
@@ -284,6 +286,13 @@ class App
         KillProfileEdge();
         cfg.Save();
         try { l.Stop(); } catch { }
+    }
+
+    static IntPtr FindUi()
+    {
+        IntPtr found = IntPtr.Zero;
+        EnumWindows((h, p) => { if (!IsWindowVisible(h)) return true; var t = new StringBuilder(256); GetWindowText(h, t, 256); string s = t.ToString(); if (s == UiTitle || s.EndsWith(" · " + UiTitle)) { found = h; return false; } return true; }, IntPtr.Zero);
+        return found;
     }
 
     public static void FocusExisting()
@@ -510,7 +519,7 @@ class App
     {
         var asm = Assembly.GetExecutingAssembly();
         var files = new Dictionary<string, byte[]>();
-        foreach (var name in new[] { "ui.html", "icon.png" })
+        foreach (var name in new[] { "ui.html", "icon.png", "app.ico" })
             using (var s = asm.GetManifestResourceStream(name))
             using (var m = new MemoryStream()) { s.CopyTo(m); files[name] = m.ToArray(); }
         files["ui.html"] = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(files["ui.html"]).Replace("__VERSION__", Install.Version));
@@ -541,11 +550,11 @@ class App
         try
         {
             string path = req.Url.AbsolutePath;
-            if (path == "/" || path == "/icon.png")
+            if (path == "/" || path == "/icon.png" || path == "/app.ico")
             {
                 if (path == "/" && req.QueryString["k"] != token) { res.StatusCode = 403; return; }
-                byte[] b = files[path == "/" ? "ui.html" : "icon.png"];
-                res.ContentType = path == "/" ? "text/html; charset=utf-8" : "image/png";
+                byte[] b = files[path == "/" ? "ui.html" : path.Substring(1)];
+                res.ContentType = path == "/" ? "text/html; charset=utf-8" : path.EndsWith(".ico") ? "image/x-icon" : "image/png";
                 res.Headers["Cache-Control"] = "no-store";
                 res.OutputStream.Write(b, 0, b.Length); return;
             }
