@@ -9,7 +9,7 @@ using Microsoft.Win32;
 static class Install
 {
     public const string Name = "키즈노트 다운로더";
-    public const string Version = "1.1.0";
+    public const string Version = "1.2.0";
     public const string ExeName = "KidsNoteDownloader.exe";
     const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\KidsNoteDownloader";
     const string OldMsiUpgradeCode = "{6F0B8E2C-3D4A-4C61-9E57-2B8A1F3C7D90}";   // 1.0.0 (msi) 버전

@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>키즈노트 다운로더</title>
+<link rel="icon" type="image/png" href="icon.png">
+<style>
+:root{
+  --bg:#f5f6f8;--card:#ffffff;--fg:#17191e;--fg-2:#454b56;--muted:#7a808b;--line:#e8e9ed;--soft:#f1f2f5;
+  --accent:#f4803a;--accent-2:#ffb347;--accent-soft:#fff1e6;--accent-fg:#c2560f;--ok:#1f9d55;--warn:#d9480f;
+  --shadow:0 1px 2px rgba(16,24,40,.05),0 8px 24px rgba(16,24,40,.06);
+  --sans:"Pretendard Variable",Pretendard,"Segoe UI Variable Text","Segoe UI","Malgun Gothic",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#111215;--card:#1a1c20;--fg:#eceef2;--fg-2:#c3c7cf;--muted:#8a909b;--line:#2a2d33;--soft:#22252a;
+  --accent:#ff8f4d;--accent-2:#ffb347;--accent-soft:#3a2416;--accent-fg:#ffb07f;--ok:#4ade80;--warn:#ff8a5c;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;-webkit-font-smoothing:antialiased;word-break:keep-all;display:flex;flex-direction:column;user-select:none}
+pre,code,input{user-select:text}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+svg{flex:none}
+.wrap{width:min(760px,100% - 40px);margin:0 auto}
+
+/* 머리 */
+header{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(12px)}
+header .wrap{display:flex;align-items:center;gap:12px;height:68px}
+header img{width:34px;height:34px}
+header h1{font-size:17px;font-weight:750;margin:0;flex:1;letter-spacing:-.01em}
+.pill{display:flex;align-items:center;gap:7px;height:32px;padding:0 12px 0 10px;border-radius:99px;background:var(--card);box-shadow:var(--shadow);font-size:13px;font-weight:600;color:var(--fg-2)}
+.pill i{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.pill.ok i{background:var(--ok);box-shadow:0 0 0 4px color-mix(in srgb,var(--ok) 18%,transparent)}
+.pill.wait i{background:var(--accent);animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.35}}
+
+main{flex:1;padding:4px 0 132px}
+.card{background:var(--card);border-radius:20px;box-shadow:var(--shadow);padding:22px 24px;margin-bottom:14px;animation:rise .35s ease both}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}}
+.card h2{font-size:15px;font-weight:700;margin:0 0 14px;display:flex;align-items:center;gap:8px}
+.card h2 .n{width:22px;height:22px;border-radius:50%;background:var(--accent-soft);color:var(--accent-fg);font-size:12px;display:grid;place-items:center;font-weight:800}
+.hint{font-size:13px;color:var(--muted);line-height:1.6}
+
+/* 로그인 */
+.hero{position:relative;overflow:hidden;padding:44px 32px 36px;text-align:center}
+.hero::before{content:"";position:absolute;inset:-40% -10% auto;height:120%;background:radial-gradient(closest-side,color-mix(in srgb,var(--accent) 22%,transparent),transparent);pointer-events:none}
+.hero>*{position:relative}
+.hero img{width:76px;height:76px;margin-bottom:18px;filter:drop-shadow(0 10px 18px color-mix(in srgb,var(--accent) 35%,transparent))}
+.hero h2{display:block;font-size:24px;font-weight:800;letter-spacing:-.02em;margin:0 0 10px}
+.hero p{margin:0 auto 26px;max-width:420px;color:var(--fg-2);line-height:1.65}
+.hero .hint{margin-top:16px}
+.spin{width:18px;height:18px;border-radius:50%;border:2.5px solid color-mix(in srgb,currentColor 25%,transparent);border-top-color:currentColor;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.big{height:52px;padding:0 26px;border-radius:14px;background:linear-gradient(135deg,var(--accent-2),var(--accent));color:#fff;font-size:16px;font-weight:750;display:inline-flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 6px 18px color-mix(in srgb,var(--accent) 35%,transparent);transition:transform .12s,filter .12s}
+.big:hover{filter:brightness(1.05);transform:translateY(-1px)}
+.big:active{transform:none}
+.big[disabled]{filter:grayscale(.6) opacity(.6);transform:none;cursor:default}
+.ghost{height:40px;padding:0 16px;border-radius:12px;background:var(--soft);font-size:14px;font-weight:650;display:inline-flex;align-items:center;gap:8px;color:var(--fg-2)}
+.ghost:hover{color:var(--fg);background:color-mix(in srgb,var(--soft) 70%,var(--line))}
+
+/* 아이 */
+.kids{display:flex;flex-wrap:wrap;gap:10px}
+.kid{display:flex;align-items:center;gap:10px;padding:8px 16px 8px 8px;border-radius:99px;background:var(--soft);font-weight:650;border:2px solid transparent;transition:.15s}
+.kid .av{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;font-size:12px;letter-spacing:-.04em;background:var(--muted)}
+.kid.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-fg)}
+.kid.on .av{background:linear-gradient(135deg,var(--accent-2),var(--accent))}
+.kid .ck{width:18px;height:18px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center}
+.kid.on .ck{background:var(--accent);border-color:var(--accent)}
+
+/* 받을 것 */
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.tile{position:relative;text-align:left;padding:16px;border-radius:16px;background:var(--soft);border:2px solid transparent;transition:.15s;min-height:104px}
+.tile>svg{width:26px;height:26px;color:var(--muted);margin-bottom:12px;display:block}
+.tile b{display:block;font-size:15px}
+.tile span{font-size:12.5px;color:var(--muted)}
+.tile.on{background:var(--accent-soft);border-color:var(--accent)}
+.tile.on>svg{color:var(--accent)}
+.tile .ck{position:absolute;top:12px;right:12px;width:20px;height:20px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;background:var(--card)}
+.tile.on .ck{background:var(--accent);border-color:var(--accent)}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px}
+.switch{width:44px;height:26px;border-radius:99px;background:var(--line);position:relative;transition:.2s;flex:none}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:.2s}
+.switch.on{background:var(--accent)}
+.switch.on::after{left:21px}
+
+/* 기간 */
+.seg{display:flex;background:var(--soft);border-radius:14px;padding:4px;gap:4px;flex-wrap:wrap}
+.seg button{flex:1;height:38px;border-radius:10px;font-size:14px;font-weight:650;color:var(--fg-2);white-space:nowrap;padding:0 10px}
+.seg button.on{background:var(--card);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.date{margin-top:12px;display:none;align-items:center;gap:10px}
+.date.show{display:flex}
+input[type=date]{height:40px;border-radius:12px;border:1.5px solid var(--line);background:var(--card);color:var(--fg);font:inherit;padding:0 12px;color-scheme:light dark}
+input[type=date]:focus{outline:none;border-color:var(--accent)}
+
+/* 저장 위치 */
+.path{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:var(--soft)}
+.path svg{color:var(--accent)}
+.path .ghost{background:var(--card)}
+.path code{flex:1;min-width:0;font-family:var(--sans);font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
+
+/* 진행 */
+.run{padding:26px}
+.run .top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:16px}
+.run .num{font-size:40px;font-weight:800;letter-spacing:-.03em;line-height:1}
+.run .num small{font-size:16px;color:var(--muted);font-weight:600;margin-left:6px}
+.run .msg{color:var(--fg-2);font-size:14px;margin-top:8px;display:flex;align-items:center;gap:8px}
+.bar{height:10px;border-radius:99px;background:var(--soft);overflow:hidden}
+.bar i{display:block;height:100%;width:0;border-radius:inherit;background:linear-gradient(90deg,var(--accent-2),var(--accent));transition:width .5s ease}
+.bar.indet i{width:35%;animation:slide 1.2s ease-in-out infinite}
+@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(290%)}}
+.stats{display:flex;gap:18px;margin-top:14px;font-size:13px;color:var(--muted);flex-wrap:wrap}
+.stats b{color:var(--fg);font-weight:700}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px;margin-top:20px}
+.grid a{position:relative;aspect-ratio:1;border-radius:12px;overflow:hidden;background:var(--soft);display:block;animation:pop .4s ease both}
+@keyframes pop{from{opacity:0;transform:scale(.92)}}
+.grid img{width:100%;height:100%;object-fit:cover;display:block}
+.grid .vid{display:grid;place-items:center;height:100%;color:var(--muted)}
+.grid span{position:absolute;left:6px;bottom:6px;font-size:11px;font-weight:700;color:#fff;background:rgba(0,0,0,.45);padding:2px 7px;border-radius:99px}
+.done-ic{width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#4ade80,#16a34a);display:grid;place-items:center;margin-bottom:14px;box-shadow:0 8px 20px rgba(22,163,74,.3)}
+.err{color:var(--warn)}
+
+details{margin-top:6px}
+summary{cursor:pointer;color:var(--muted);font-size:13px;list-style:none;display:inline-flex;align-items:center;gap:6px;padding:6px 2px}
+summary::-webkit-details-marker{display:none}
+pre{margin:8px 0 0;max-height:220px;overflow:auto;background:var(--soft);border-radius:12px;padding:12px 14px;font-size:12px;line-height:1.7;color:var(--fg-2);white-space:pre-wrap;font-family:Consolas,var(--sans)}
+
+/* 아래 고정 */
+footer{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(transparent,var(--bg) 30%);padding:28px 0 22px}
+footer .wrap{display:flex;align-items:center;gap:16px;background:var(--card);border-radius:20px;box-shadow:0 10px 30px rgba(16,24,40,.12);padding:12px 12px 12px 22px}
+footer .sum{flex:1;min-width:0;font-size:13.5px;color:var(--fg-2);line-height:1.5}
+footer .sum b{color:var(--fg);display:block;font-size:14.5px}
+footer .big{height:50px}
+.stop{background:var(--soft);color:var(--fg);box-shadow:none}
+.hide{display:none!important}
+
+#toast{position:fixed;left:50%;bottom:110px;transform:translate(-50%,10px);background:var(--fg);color:var(--bg);padding:10px 18px;border-radius:12px;font-size:14px;opacity:0;transition:.25s;pointer-events:none;z-index:9}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <img src="icon.png" alt="">
+  <h1>키즈노트 다운로더</h1>
+  <div class="pill" id="pill"><i></i><span id="pillText">확인 중</span></div>
+</div></header>
+
+<main><div class="wrap">
+
+  <!-- 로그인 -->
+  <section class="card hero hide" id="hero">
+    <img src="icon.png" alt="">
+    <h2 id="heroTitle">아이 사진, 한 번에 보관해요</h2>
+    <p id="heroText">키즈노트 알림장과 앨범의 사진·동영상을 원본 화질 그대로 내 PC에 저장해요. 먼저 키즈노트에 로그인해 주세요.</p>
+    <button class="big" id="loginBtn">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+      <span>키즈노트로 로그인</span>
+    </button>
+    <div class="hint" id="heroHint">키즈노트 공식 로그인 창이 열려요. 비밀번호는 이 프로그램에 저장되지 않아요.</div>
+  </section>
+
+  <!-- 진행 / 완료 -->
+  <section class="card run hide" id="run">
+    <div id="doneHead" class="hide"><div class="done-ic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div></div>
+    <div class="top">
+      <div>
+        <div class="num" id="num">0<small id="numSub"></small></div>
+        <div class="msg" id="msg"></div>
+      </div>
+      <button class="ghost" id="openF2"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>폴더 열기</button>
+    </div>
+    <div class="bar" id="bar"><i></i></div>
+    <div class="stats" id="stats"></div>
+    <div class="grid" id="grid"></div>
+    <details><summary><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>자세한 기록</summary><pre id="log"></pre></details>
+  </section>
+
+  <!-- 설정 -->
+  <div id="setup" class="hide">
+    <section class="card">
+      <h2><span class="n">1</span>누구 사진을 받을까요</h2>
+      <div class="kids" id="kids"></div>
+      <div class="hint" style="margin-top:12px">아이가 더 있다면 <a href="#" id="moreKids" style="color:var(--accent-fg)">키즈노트 창</a>에서 아이를 바꿔 주세요. 여기에 자동으로 추가돼요.</div>
+    </section>
+
+    <section class="card">
+      <h2><span class="n">2</span>무엇을 받을까요</h2>
+      <div class="tiles">
+        <button class="tile" data-k="reports"><span class="ck"></span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>
+          <b>알림장 사진</b><span>선생님이 알림장에 올린 사진</span></button>
+        <button class="tile" data-k="albums"><span class="ck"></span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>
+          <b>앨범 사진</b><span>앨범 메뉴에 올라온 사진</span></button>
+        <button class="tile" data-k="videos"><span class="ck"></span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="13" height="14" rx="3"/><path d="M16 10l5-3v10l-5-3z"/></svg>
+          <b>동영상</b><span>알림장·앨범의 영상</span></button>
+      </div>
+      <div class="row">
+        <div><b style="font-size:14px">알림장은 선생님 글만</b><div class="hint">부모님이 쓴 글의 사진은 빼요</div></div>
+        <button class="switch" id="teacher" aria-label="알림장은 선생님 글만"></button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2><span class="n">3</span>언제부터 받을까요</h2>
+      <div class="seg" id="range">
+        <button data-v="all">전체</button><button data-v="1m">최근 1개월</button><button data-v="3m">최근 3개월</button><button data-v="1y">최근 1년</button><button data-v="custom">날짜 지정</button>
+      </div>
+      <div class="date" id="dateRow"><input type="date" id="from"><span class="hint">이후에 올라온 글</span></div>
+    </section>
+
+    <section class="card">
+      <h2><span class="n">4</span>어디에 저장할까요</h2>
+      <div class="path">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        <code id="folder"></code>
+        <button class="ghost" id="pick">변경</button>
+        <button class="ghost" id="openF">열기</button>
+      </div>
+      <div class="hint" style="margin-top:10px">아이 이름 › 알림장·앨범 › 날짜별 폴더로 정리돼요. 이미 받은 사진은 건너뛰어요.</div>
+    </section>
+  </div>
+
+
+</div></main>
+
+<footer id="foot" class="hide"><div class="wrap">
+  <div class="sum" id="sum"></div>
+  <button class="big" id="go"><span id="goText">사진 받기</span></button>
+</div></footer>
+<div id="toast"></div>
+
+<script>
+const K = new URLSearchParams(location.search).get('k');
+const $ = id => document.getElementById(id);
+const api = async (p, b) => {
+  const r = await fetch('/api/' + p, { method: 'POST', headers: { 'X-Token': K, 'Content-Type': 'application/json' }, body: JSON.stringify(b || {}) });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+};
+const toast = m => { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2400); };
+const CHECK = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+const RANGE = { all: '전체 기간', '1m': '최근 1개월', '3m': '최근 3개월', '1y': '최근 1년' };
+
+let S = null, cfg = null, kidsSig = '', shown = new Set(), wasRunning = false, editedAt = 0;
+
+// 설정 바꾸면 바로 저장
+let saveT;
+function save() {
+  clearTimeout(saveT); editedAt = Date.now();
+  saveT = setTimeout(() => api('settings', cfg), 150);
+  paintSetup();
+}
+
+function paintSetup() {
+  document.querySelectorAll('.tile').forEach(t => { const on = cfg[t.dataset.k]; t.classList.toggle('on', on); t.querySelector('.ck').innerHTML = on ? CHECK : ''; });
+  $('teacher').classList.toggle('on', cfg.teacher);
+  document.querySelectorAll('#range button').forEach(b => b.classList.toggle('on', b.dataset.v === cfg.range));
+  $('dateRow').classList.toggle('show', cfg.range === 'custom');
+  if (document.activeElement !== $('from')) $('from').value = cfg.from;
+  $('folder').textContent = cfg.folder; $('folder').title = cfg.folder;
+  document.querySelectorAll('.kid').forEach(k => {
+    const on = !cfg.skip.includes(k.dataset.id);
+    k.classList.toggle('on', on); k.querySelector('.ck').innerHTML = on ? CHECK : '';
+  });
+  // 아래 요약
+  const what = [cfg.reports && '알림장', cfg.albums && '앨범'].filter(Boolean).join('·');
+  const kids = (S ? S.kids : []).filter(k => !cfg.skip.includes(k.id)).map(k => k.name);
+  const when = cfg.range === 'custom' ? cfg.from.replace(/-/g, '.') + ' 이후' : RANGE[cfg.range];
+  $('sum').innerHTML = kids.length && what
+    ? `<b>${esc(kids.join(', '))}의 ${what} 사진${cfg.videos ? '과 동영상' : ''}</b>${when} · 원본 화질`
+    : `<b>${!kids.length ? '받을 아이를 골라 주세요' : '받을 내용을 골라 주세요'}</b>위에서 선택하면 바로 시작할 수 있어요`;
+  if (!S || !S.job.running) $('go').disabled = !(kids.length && what);
+}
+const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+
+const initials = n => { n = n.trim(); return /^[가-힣]{3,4}$/.test(n) ? n.slice(-2) : (n[0] || '?'); };
+function paintKids() {
+  const sig = S.kids.map(k => k.id + k.name).join('|');
+  if (sig === kidsSig) return; kidsSig = sig;
+  $('kids').innerHTML = S.kids.map(k => `<button class="kid" data-id="${k.id}"><span class="av">${esc(initials(k.name))}</span>${esc(k.name)}<span class="ck"></span></button>`).join('');
+}
+
+function paintRun() {
+  const j = S.job, active = j.running || ['done', 'stopped', 'error'].includes(j.phase);
+  $('run').classList.toggle('hide', !active);
+  if (!active) return;
+  const finished = !j.running;
+  $('doneHead').classList.toggle('hide', !(finished && j.phase === 'done'));
+  const listing = j.phase === 'listing';
+  $('bar').classList.toggle('indet', listing);
+  $('bar').firstElementChild.style.width = listing ? '' : (j.total ? (j.done / j.total * 100).toFixed(1) : 100) + '%';
+  if (finished && j.phase === 'done') {
+    $('num').innerHTML = `${j.fresh.toLocaleString()}<small>개 새로 받았어요</small>`;
+    $('msg').textContent = j.fresh ? `사진 ${(j.fresh - j.freshVideos).toLocaleString()}장${j.freshVideos ? ', 동영상 ' + j.freshVideos + '개' : ''}를 저장했어요` : '새로 올라온 사진이 없어요. 모두 받아 둔 상태예요';
+  } else if (finished) {
+    $('num').innerHTML = `${j.fresh}<small>개 받음</small>`;
+    $('msg').innerHTML = j.phase === 'error' ? `<span class="err">${esc(j.message)}</span>` : '멈췄어요. 다시 시작하면 이어서 받아요';
+  } else if (listing) {
+    $('num').innerHTML = `<span style="font-size:26px">목록 확인 중</span>`;
+    $('msg').innerHTML = `<span class="spin"></span>${esc(j.message)}`;
+  } else {
+    const pct = j.total ? Math.floor(j.done / j.total * 100) : 0;
+    $('num').innerHTML = `${pct}%<small>${j.done.toLocaleString()} / ${j.total.toLocaleString()}</small>`;
+    const rate = j.done / Math.max(1, j.elapsed), left = rate > 0 ? (j.total - j.done) / rate : 0;
+    $('msg').innerHTML = `<span class="spin"></span>사진을 받는 중${left > 5 ? ' · 약 ' + (left < 60 ? Math.ceil(left) + '초' : Math.ceil(left / 60) + '분') + ' 남음' : ''}`;
+  }
+  $('stats').innerHTML = j.total ? `<span>새로 받음 <b>${j.fresh}</b></span><span>이미 있음 <b>${j.skipped}</b></span>${j.failed ? `<span class="err">실패 <b class="err">${j.failed}</b></span>` : ''}` : '';
+  // 방금 받은 사진
+  const g = $('grid');
+  for (const r of S.recent) {
+    if (shown.has(r.path)) continue; shown.add(r.path);
+    const a = document.createElement('a'); a.href = '#'; a.title = r.path.split('\\').pop();
+    a.innerHTML = r.video
+      ? `<div class="vid"><svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>`
+      : `<img loading="lazy" src="/thumb?k=${K}&p=${encodeURIComponent(r.path)}" alt="">`;
+    a.innerHTML += `<span>${r.date}</span>`;
+    a.onclick = e => { e.preventDefault(); api('open', { path: r.path }); };
+    g.prepend(a);
+    while (g.children.length > 18) g.lastElementChild.remove();
+  }
+  $('log').textContent = S.log.join('\n');
+}
+
+function paint() {
+  const login = S.login, ok = login === 'ok' && S.kids.length;
+  const pill = $('pill');
+  pill.className = 'pill ' + (ok ? 'ok' : login === 'needed' ? '' : 'wait');
+  $('pillText').textContent = ok ? '로그인됨' : login === 'needed' ? '로그인 필요' : login === 'waiting' ? '로그인 기다리는 중' : '확인 중';
+  $('hero').classList.toggle('hide', !!ok);
+  const btn = $('loginBtn');
+  if (login === 'checking') { btn.disabled = true; btn.querySelector('span').textContent = '로그인 상태 확인 중'; }
+  else if (login === 'waiting') { btn.disabled = false; btn.querySelector('span').textContent = '키즈노트 창 다시 보기'; $('heroHint').textContent = '열린 키즈노트 창에서 로그인하면 여기로 자동으로 돌아와요.'; }
+  else { btn.disabled = false; btn.querySelector('span').textContent = '키즈노트로 로그인'; $('heroHint').textContent = '키즈노트 공식 로그인 창이 열려요. 비밀번호는 이 프로그램에 저장되지 않아요.'; }
+
+  const running = S.job.running;
+  $('setup').classList.toggle('hide', !ok || running);
+  $('foot').classList.toggle('hide', !ok);
+  if (ok) paintKids();
+  if (!cfg || Date.now() - editedAt > 1500) { cfg = Object.assign({}, S.cfg, { skip: S.kids.filter(k => !k.on).map(k => k.id) }); }
+  if (ok) paintSetup();
+  paintRun();
+
+  const go = $('go');
+  if (running) { go.classList.add('stop'); go.disabled = false; $('goText').textContent = '멈추기'; }
+  else { go.classList.remove('stop'); $('goText').textContent = ['done', 'stopped', 'error'].includes(S.job.phase) ? '다시 받기' : '사진 받기'; }
+  if (wasRunning && !running && S.job.phase === 'done') document.title = '완료 · 키즈노트 다운로더';
+  if (running) document.title = (S.job.total ? Math.floor(S.job.done / S.job.total * 100) + '% · ' : '') + '키즈노트 다운로더';
+  wasRunning = running;
+}
+
+async function poll() {
+  try { S = await api('state'); paint(); } catch (e) {}
+  setTimeout(poll, S && S.job.running ? 500 : 800);
+}
+
+// ── 입력 ──
+$('loginBtn').onclick = $('moreKids').onclick = e => { e.preventDefault(); api('login'); };
+document.querySelectorAll('.tile').forEach(t => t.onclick = () => { cfg[t.dataset.k] = !cfg[t.dataset.k]; save(); });
+$('teacher').onclick = () => { cfg.teacher = !cfg.teacher; save(); };
+document.querySelectorAll('#range button').forEach(b => b.onclick = () => { cfg.range = b.dataset.v; save(); });
+$('from').onchange = () => { cfg.from = $('from').value; save(); };
+$('kids').onclick = e => {
+  const k = e.target.closest('.kid'); if (!k) return;
+  const id = k.dataset.id, i = cfg.skip.indexOf(id);
+  if (i >= 0) cfg.skip.splice(i, 1); else cfg.skip.push(id);
+  save();
+};
+$('pick').onclick = async () => { const f = await api('pick'); cfg.folder = f; paintSetup(); };
+$('openF').onclick = $('openF2').onclick = () => api('open', {});
+$('go').onclick = async () => {
+  if (S.job.running) { api('stop'); $('goText').textContent = '멈추는 중…'; return; }
+  shown.clear(); $('grid').innerHTML = '';
+  const r = await api('start');
+  const why = { login: '먼저 키즈노트에 로그인해 주세요', nokids: '받을 아이를 골라 주세요', nothing: '알림장이나 앨범 중 하나는 골라 주세요', folder: '저장 폴더를 만들 수 없어요' }[r];
+  if (why) toast(why); else window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+addEventListener('beforeunload', e => { if (S && S.job.running) { e.preventDefault(); e.returnValue = ''; } });
+addEventListener('pagehide', () => navigator.sendBeacon && fetch('/api/bye', { method: 'POST', headers: { 'X-Token': K }, keepalive: true }));
+poll();
+</script>
+</body>
+</html>
