@@ -48,6 +48,13 @@ static class SetupMain
         Directory.CreateDirectory(Install.Dir);
         using (var s = Assembly.GetExecutingAssembly().GetManifestResourceStream(Install.ExeName))
         using (var o = File.Create(Install.Exe)) s.CopyTo(o);
+        // 압축 모드용 라이브러리 (libwebp: BSD-3, vcruntime140: Microsoft 재배포 허용 파일)
+        foreach (var name in new[] { "libwebp.dll", "libsharpyuv.dll", "vcruntime140.dll", "libwebp-COPYING.txt", "libwebp-PATENTS.txt" })
+            using (var s = Assembly.GetExecutingAssembly().GetManifestResourceStream(name))
+            {
+                string dst = Path.Combine(Install.Dir, name);
+                try { using (var o = File.Create(dst)) s.CopyTo(o); } catch (IOException) { }   // 실행 중이라 잠겨 있으면 기존 것 사용
+            }
         using (var s = Assembly.GetExecutingAssembly().GetManifestResourceStream("app.ico"))
         using (var o = File.Create(Install.IconFile)) s.CopyTo(o);
         say(0.75f, "바로가기를 만드는 중…");

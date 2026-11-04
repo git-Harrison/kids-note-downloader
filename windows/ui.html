@@ -87,8 +87,21 @@ body.center .hero{max-width:560px;margin:0 auto}
 .switch.on{background:var(--accent)}
 .switch.on::after{left:21px}
 
-/* 기간 */
-.seg{display:flex;background:var(--soft);border-radius:14px;padding:4px;gap:4px;flex-wrap:wrap}
+/* 화질 */
+.qual{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.q{position:relative;text-align:left;padding:18px 18px 16px;border-radius:16px;background:var(--soft);border:2px solid transparent;transition:.15s;display:flex;flex-direction:column;justify-content:flex-start}
+.q b{font-size:15.5px}
+.q .tag{margin-left:8px;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--accent);color:#fff;vertical-align:2px}
+.q .tag.soft{background:var(--line);color:var(--fg-2)}
+.q p{margin:10px 0 8px;font-size:13.5px;line-height:1.6;color:var(--fg-2)}
+.q p b{font-size:inherit;color:var(--fg)}
+.q ul{margin:0;padding:0 0 0 16px;font-size:12.5px;color:var(--muted);line-height:1.75}
+.q.on{background:var(--accent-soft);border-color:var(--accent)}
+.q .ck{position:absolute;top:14px;right:14px;width:20px;height:20px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;background:var(--card)}
+.q.on .ck{background:var(--accent);border-color:var(--accent)}
+@media (max-width:640px){.qual{grid-template-columns:1fr}}
+
+/* 기간 */.seg{display:flex;background:var(--soft);border-radius:14px;padding:4px;gap:4px;flex-wrap:wrap}
 .seg button{flex:1;height:38px;border-radius:10px;font-size:14px;font-weight:650;color:var(--fg-2);white-space:nowrap;padding:0 10px}
 .seg button.on{background:var(--card);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .date{margin-top:12px;display:none;align-items:center;gap:10px}
@@ -206,7 +219,23 @@ footer .big{height:50px}
     </section>
 
     <section class="card">
-      <h2><span class="n">3</span>언제부터 받을까요</h2>
+      <h2><span class="n">3</span>어떤 화질로 받을까요</h2>
+      <div class="qual" id="qual">
+        <button class="q" data-v="original"><span class="ck"></span>
+          <div class="qt"><b>원본 그대로</b><span class="tag">추천</span></div>
+          <p>키즈노트에 올라온 파일을 손대지 않고 저장해요. 가장 선명해서 <b>사진 인화·크게 확대</b>에도 좋아요.</p>
+          <ul><li>사진: JPG 원본</li><li>동영상: 올라온 화질 그대로</li><li>용량: 큼 (휴대폰 사진 1장 약 3MB, 1080p 영상 1분 약 100MB)</li></ul>
+        </button>
+        <button class="q" data-v="compact"><span class="ck"></span>
+          <div class="qt"><b>용량 줄여서</b><span class="tag soft">WebP · 720p</span></div>
+          <p>눈으로 보기엔 거의 같지만 <b>용량이 훨씬 작아요.</b> PC·휴대폰 저장 공간이 부족하거나 오래 보관할 때 좋아요.</p>
+          <ul><li>사진: WebP로 변환</li><li>동영상: 720p MP4로 다시 압축</li><li>용량: 사진은 약 1/3, 동영상은 약 1/5~1/6 (원본에 따라 달라요)</li></ul>
+        </button>
+      </div>
+      <div class="hint" id="qualHint" style="margin-top:12px">압축한 파일은 원본으로 되돌릴 수 없어요. 원본도 남기고 싶다면 '원본 그대로'로 받아 두세요. 아이폰 HEIC 사진처럼 변환할 수 없는 파일은 원본으로 저장해요.</div>
+    </section>
+    <section class="card">
+      <h2><span class="n">4</span>언제부터 받을까요</h2>
       <div class="seg" id="range">
         <button data-v="all">전체</button><button data-v="1m">최근 1개월</button><button data-v="3m">최근 3개월</button><button data-v="1y">최근 1년</button><button data-v="custom">날짜 지정</button>
       </div>
@@ -214,7 +243,7 @@ footer .big{height:50px}
     </section>
 
     <section class="card">
-      <h2><span class="n">4</span>어디에 저장할까요</h2>
+      <h2><span class="n">5</span>어디에 저장할까요</h2>
       <div class="path">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
         <code id="folder"></code>
@@ -259,6 +288,7 @@ function save() {
 function paintSetup() {
   document.querySelectorAll('.tile').forEach(t => { const on = cfg[t.dataset.k]; t.classList.toggle('on', on); t.querySelector('.ck').innerHTML = on ? CHECK : ''; });
   $('teacher').classList.toggle('on', cfg.teacher);
+  document.querySelectorAll('.q').forEach(q => { const on = cfg.quality === q.dataset.v; q.classList.toggle('on', on); q.querySelector('.ck').innerHTML = on ? CHECK : ''; });
   document.querySelectorAll('#range button').forEach(b => b.classList.toggle('on', b.dataset.v === cfg.range));
   $('dateRow').classList.toggle('show', cfg.range === 'custom');
   if (document.activeElement !== $('from')) $('from').value = cfg.from;
@@ -272,10 +302,11 @@ function paintSetup() {
   const kids = (S ? S.kids : []).filter(k => !cfg.skip.includes(k.id)).map(k => k.name);
   const when = cfg.range === 'custom' ? cfg.from.replace(/-/g, '.') + ' 이후' : RANGE[cfg.range];
   $('sum').innerHTML = kids.length && what
-    ? `<b>${esc(kids.join(', '))}의 ${what} 사진${cfg.videos ? '과 동영상' : ''}</b>${when} · 원본 화질`
+    ? `<b>${esc(kids.join(', '))}의 ${what} 사진${cfg.videos ? '과 동영상' : ''}</b>${when} · ${cfg.quality === 'compact' ? '용량 줄여서 (WebP·720p)' : '원본 화질'}`
     : `<b>${!kids.length ? '받을 아이를 골라 주세요' : '받을 내용을 골라 주세요'}</b>위에서 선택하면 바로 시작할 수 있어요`;
   if (!S || !S.job.running) $('go').disabled = !(kids.length && what);
 }
+const fmtB = n => n >= 1073741824 ? (n / 1073741824).toFixed(1) + 'GB' : n >= 1048576 ? (n / 1048576).toFixed(0) + 'MB' : Math.max(1, Math.round(n / 1024)) + 'KB';
 const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 const initials = n => { n = n.trim(); return /^[가-힣]{3,4}$/.test(n) ? n.slice(-2) : (n[0] || '?'); };
@@ -296,7 +327,8 @@ function paintRun() {
   $('bar').firstElementChild.style.width = listing ? '' : (j.total ? (j.done / j.total * 100).toFixed(1) : 100) + '%';
   if (finished && j.phase === 'done') {
     $('num').innerHTML = `${j.fresh.toLocaleString()}<small>개 새로 받았어요</small>`;
-    $('msg').textContent = j.fresh ? `사진 ${(j.fresh - j.freshVideos).toLocaleString()}장${j.freshVideos ? ', 동영상 ' + j.freshVideos + '개' : ''}를 저장했어요` : '새로 올라온 사진이 없어요. 모두 받아 둔 상태예요';
+    const saved = j.compact && j.bytesIn > 0 ? ` · 원본보다 ${Math.round((1 - j.bytesOut / j.bytesIn) * 100)}% 작게 (${fmtB(j.bytesIn)} → ${fmtB(j.bytesOut)})` : '';
+    $('msg').textContent = (j.fresh ? `사진 ${(j.fresh - j.freshVideos).toLocaleString()}장${j.freshVideos ? ', 동영상 ' + j.freshVideos + '개' : ''}를 저장했어요` : '새로 올라온 사진이 없어요. 모두 받아 둔 상태예요') + saved;
   } else if (finished) {
     $('num').innerHTML = `${j.fresh}<small>개 받음</small>`;
     $('msg').innerHTML = j.phase === 'error' ? `<span class="err">${esc(j.message)}</span>` : '멈췄어요. 다시 시작하면 이어서 받아요';
@@ -362,6 +394,7 @@ async function poll() {
 // ── 입력 ──
 $('loginBtn').onclick = $('moreKids').onclick = e => { e.preventDefault(); api('login'); };
 document.querySelectorAll('.tile').forEach(t => t.onclick = () => { cfg[t.dataset.k] = !cfg[t.dataset.k]; save(); });
+document.querySelectorAll('.q').forEach(q => q.onclick = () => { cfg.quality = q.dataset.v; save(); });
 $('teacher').onclick = () => { cfg.teacher = !cfg.teacher; save(); };
 document.querySelectorAll('#range button').forEach(b => b.onclick = () => { cfg.range = b.dataset.v; save(); });
 $('from').onchange = () => { cfg.from = $('from').value; save(); };

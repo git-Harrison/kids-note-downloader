@@ -10,6 +10,7 @@ Node.js 설치나 쿠키 복사 없이, 설치 파일을 실행하고 키즈노�
 3. 받을 아이, 받을 내용(알림장 사진·앨범 사진·동영상), 기간, 저장 위치를 고르고 **[다운로드 시작]**.
    - 이미 받은 파일은 건너뛰어서, 다시 실행하면 새 글만 받아요.
    - 파일 날짜를 글 올린 날로 맞춰 사진 앱에서 날짜순으로 정렬돼요.
+   - **화질 선택:** "원본 그대로"(가장 선명) 또는 "용량 줄여서"(사진 WebP·동영상 720p, 사진은 약 1/3·영상은 약 1/5 크기).
 
 ```text
 사진\키즈노트\아이이름\알림장\2026-10-15\2026-10-15_글번호_01.jpg
@@ -20,6 +21,10 @@ Node.js 설치나 쿠키 복사 없이, 설치 파일을 실행하고 키즈노�
 `windows\build.ps1` 실행 → `windows\out\`에 프로그램·설치 파일·zip 생성. Windows에 기본으로 있는 C# 컴파일러만 써요.
 
 제거는 설정 → 앱 → 설치된 앱에서 할 수 있어요. 받아 둔 사진은 지워지지 않아요.
+
+## 포함된 외부 구성 요소
+- [libwebp](https://chromium.googlesource.com/webm/libwebp) 1.6.0 (BSD-3-Clause, `windows/vendor/libwebp-COPYING.txt`, `libwebp-PATENTS.txt`) — conda-forge 빌드 `libwebp-base-1.6.0`
+- `vcruntime140.dll` — Microsoft Visual C++ 재배포 가능 런타임
 
 ---
 

@@ -63,7 +63,7 @@ class Child
     public override string ToString() { return string.IsNullOrEmpty(Name) ? "아이 #" + Id : Name; }
 }
 
-class Job { public string Url, Path; public DateTime When; public bool Video; }
+class Job { public string Url, Path, Orig; public DateTime When; public bool Video, Compact; }
 
 // ── Chrome DevTools Protocol 최소 구현 ──
 class Cdp : IDisposable
@@ -169,6 +169,7 @@ class Settings
     public string Folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "키즈노트");
     public bool Reports = true, Albums = true, Videos = true, TeacherOnly = true;
     public string Range = "all", From = DateTime.Today.AddMonths(-1).ToString("yyyy-MM-dd");
+    public string Quality = "original";   // original: 원본 그대로 · compact: 사진 WebP + 동영상 720p 로 줄여서
     public HashSet<string> SkipKids = new HashSet<string>();
     static string FileName { get { return Path.Combine(Install.DataDir, "settings.txt"); } }
 
@@ -188,6 +189,7 @@ class Settings
                 if (k == "teacher") s.TeacherOnly = v == "1";
                 if (k == "range") s.Range = v;
                 if (k == "from") s.From = v;
+                if (k == "quality" && (v == "original" || v == "compact")) s.Quality = v;
                 if (k == "all" && v == "0" && s.Range == "all") s.Range = "custom";   // 예전 버전 설정
                 if (k == "skip") foreach (var x in v.Split(',')) if (x.Length > 0) s.SkipKids.Add(x);
             }
@@ -202,7 +204,7 @@ class Settings
             Directory.CreateDirectory(Install.DataDir);
             File.WriteAllLines(FileName, new[] {
                 "folder=" + Folder, "reports=" + B(Reports), "albums=" + B(Albums), "videos=" + B(Videos), "teacher=" + B(TeacherOnly),
-                "range=" + Range, "from=" + From, "skip=" + string.Join(",", SkipKids) }, Encoding.UTF8);
+                "range=" + Range, "from=" + From, "quality=" + Quality, "skip=" + string.Join(",", SkipKids) }, Encoding.UTF8);
         }
         catch { }
     }
@@ -240,6 +242,7 @@ class App
     volatile bool running, stopRequested;
     string phase = "idle", message = "";
     int total, done, fresh, skipped, failed, freshVideos;
+    long bytesIn, bytesOut;   // 압축 모드: 원본 크기 합 / 저장한 크기 합
     DateTime startedAt;
     readonly List<Dictionary<string, object>> recent = new List<Dictionary<string, object>>();
     readonly List<string> log = new List<string>();
@@ -615,10 +618,12 @@ class App
                 { "kids", kids.Values.Select(k => new Dictionary<string, object> { { "id", k.Id }, { "name", k.ToString() }, { "on", !cfg.SkipKids.Contains(k.Id) } }).ToList() },
                 { "cfg", new Dictionary<string, object> {
                     { "folder", cfg.Folder }, { "reports", cfg.Reports }, { "albums", cfg.Albums }, { "videos", cfg.Videos },
-                    { "teacher", cfg.TeacherOnly }, { "range", cfg.Range }, { "from", cfg.From } } },
+                    { "teacher", cfg.TeacherOnly }, { "range", cfg.Range }, { "from", cfg.From }, { "quality", cfg.Quality } } },
+                { "encoders", new Dictionary<string, object> { { "webp", WebpEncoder.Available }, { "video", VideoCompressor.Available } } },
                 { "job", new Dictionary<string, object> {
                     { "running", running }, { "phase", phase }, { "message", message }, { "total", total }, { "done", done },
                     { "fresh", fresh }, { "skipped", skipped }, { "failed", failed }, { "freshVideos", freshVideos },
+                    { "bytesIn", bytesIn }, { "bytesOut", bytesOut }, { "compact", cfg.Quality == "compact" },
                     { "elapsed", running ? (DateTime.Now - startedAt).TotalSeconds : 0 } } },
                 { "recent", recent.ToList() },
                 { "log", log.Skip(Math.Max(0, log.Count - 80)).ToList() },
@@ -634,6 +639,7 @@ class App
             cfg.Reports = J.Bool(q, "reports", cfg.Reports); cfg.Albums = J.Bool(q, "albums", cfg.Albums);
             cfg.Videos = J.Bool(q, "videos", cfg.Videos); cfg.TeacherOnly = J.Bool(q, "teacher", cfg.TeacherOnly);
             cfg.Range = J.Str(q, "range") ?? cfg.Range; cfg.From = J.Str(q, "from") ?? cfg.From;
+            string ql = J.Str(q, "quality"); if (ql == "original" || ql == "compact") cfg.Quality = ql;
             var skip = J.Arr(q, "skip");
             if (q.ContainsKey("skip")) { cfg.SkipKids.Clear(); foreach (var x in skip) cfg.SkipKids.Add(x.ToString()); }
         }
@@ -663,6 +669,20 @@ class App
         if (string.IsNullOrEmpty(p) || !p.StartsWith(cfg.Folder, StringComparison.OrdinalIgnoreCase) || !File.Exists(p)) return null;
         if (!Regex.IsMatch(p, @"\.(jpe?g|png|gif|webp|bmp)$", RegexOptions.IgnoreCase)) return null;
         lock (thumbs) { byte[] hit; if (thumbs.TryGetValue(p, out hit)) return hit; }
+        var bytes = RenderThumb(p);
+        if (bytes != null) lock (thumbs) { if (thumbs.Count > 200) thumbs.Clear(); thumbs[p] = bytes; }
+        return bytes;
+    }
+
+    // 압축 모드: WebP 는 미리보기로 못 읽어서, 변환 전 원본으로 미리보기를 만들어 둔다
+    void PrecacheThumb(string key, string source)
+    {
+        var bytes = RenderThumb(source);
+        if (bytes != null) lock (thumbs) { if (thumbs.Count > 200) thumbs.Clear(); thumbs[key] = bytes; }
+    }
+
+    static byte[] RenderThumb(string p)
+    {
         try
         {
             using (var img = Image.FromFile(p))
@@ -685,9 +705,7 @@ class App
                         var enc = ImageCodecInfo.GetImageEncoders().First(e => e.MimeType == "image/jpeg");
                         var ep = new EncoderParameters(1); ep.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 82L);
                         bmp.Save(ms, enc, ep);
-                        var bytes = ms.ToArray();
-                        lock (thumbs) { if (thumbs.Count > 200) thumbs.Clear(); thumbs[p] = bytes; }
-                        return bytes;
+                        return ms.ToArray();
                     }
                 }
             }
@@ -711,15 +729,15 @@ class App
         lock (gate)
         {
             running = true; stopRequested = false; phase = "listing"; message = "목록을 확인하는 중…";
-            total = done = fresh = skipped = failed = freshVideos = 0; startedAt = DateTime.Now; recent.Clear();
+            total = done = fresh = skipped = failed = freshVideos = 0; bytesIn = bytesOut = 0; startedAt = DateTime.Now; recent.Clear();
         }
-        string root = cfg.Folder; bool reports = cfg.Reports, albums = cfg.Albums, videos = cfg.Videos, teacherOnly = cfg.TeacherOnly;
+        string root = cfg.Folder; bool reports = cfg.Reports, albums = cfg.Albums, videos = cfg.Videos, teacherOnly = cfg.TeacherOnly, compact = cfg.Quality == "compact";
         DateTime? from = cfg.FromDate();
         new Thread(() =>
         {
             try
             {
-                RunJob(chosen, root, reports, albums, videos, teacherOnly, from);
+                RunJob(chosen, root, reports, albums, videos, teacherOnly, compact, from);
                 lock (gate) phase = stopRequested ? "stopped" : "done";
             }
             catch (Exception e) { lock (gate) { phase = "error"; message = e.Message; } Log("중단됨: " + e.Message); }
@@ -757,7 +775,7 @@ class App
         return DateTime.TryParse(s, null, System.Globalization.DateTimeStyles.RoundtripKind, out d) ? d.ToLocalTime() : DateTime.MinValue;
     }
 
-    void RunJob(List<Child> chosen, string root, bool reports, bool albums, bool videos, bool teacherOnly, DateTime? from)
+    void RunJob(List<Child> chosen, string root, bool reports, bool albums, bool videos, bool teacherOnly, bool compact, DateTime? from)
     {
         var jobs = new List<Job>();
         foreach (var c in chosen)
@@ -767,11 +785,11 @@ class App
                 foreach (var r in ListAll(apiPrefix + "/children/" + c.Id + "/reports/?page_size=100", c.Enrollment, from, c + " 알림장"))
                 {
                     if (teacherOnly && J.Str(J.Obj(r, "author"), "type") != "teacher") continue;
-                    AddJobs(jobs, r, Path.Combine(kidDir, "알림장"), false, videos);
+                    AddJobs(jobs, r, Path.Combine(kidDir, "알림장"), false, videos, compact);
                 }
             if (albums && !stopRequested)
                 foreach (var r in ListAll(apiPrefix + "/children/" + c.Id + "/albums/?page_size=100", c.Enrollment, from, c + " 앨범"))
-                    AddJobs(jobs, r, Path.Combine(kidDir, "앨범"), true, videos);
+                    AddJobs(jobs, r, Path.Combine(kidDir, "앨범"), true, videos, compact);
         }
         if (stopRequested) return;
 
@@ -791,7 +809,7 @@ class App
                         if (File.Exists(j.Path)) lock (gate) skipped++;
                         else
                         {
-                            Download(j);
+                            Save(j);
                             lock (gate)
                             {
                                 fresh++; if (j.Video) freshVideos++;
@@ -810,7 +828,7 @@ class App
         Log(stopRequested ? "멈췄어요" : "끝났어요 · 새로 받음 " + fresh + " · 이미 있음 " + skipped + (failed > 0 ? " · 실패 " + failed : ""));
     }
 
-    static void AddJobs(List<Job> jobs, Dictionary<string, object> r, string baseDir, bool album, bool videos)
+    static void AddJobs(List<Job> jobs, Dictionary<string, object> r, string baseDir, bool album, bool videos, bool compact)
     {
         DateTime when = CreatedAt(r);
         string day = when.ToString("yyyy-MM-dd"), id = J.Str(r, "id") ?? "0";
@@ -823,7 +841,8 @@ class App
             string url = img != null ? (J.Str(img, "original") ?? J.Str(img, "large") ?? J.Str(img, "url")) : o as string;
             if (string.IsNullOrEmpty(url)) continue;
             n++;
-            jobs.Add(new Job { Url = url, When = when, Path = Path.Combine(dir, day + "_" + id + "_" + n.ToString("00") + Ext(url, ".jpg")) });
+            string b = Path.Combine(dir, day + "_" + id + "_" + n.ToString("00")), orig = b + Ext(url, ".jpg");
+            jobs.Add(new Job { Url = url, When = when, Orig = orig, Compact = compact, Path = compact && !orig.EndsWith(".gif") ? b + ".webp" : orig });
         }
         if (videos)
         {
@@ -832,7 +851,10 @@ class App
             var vd = v as Dictionary<string, object>;
             if (vd != null) vurl = J.Str(vd, "high") ?? J.Str(vd, "original") ?? J.Str(vd, "low");
             if (!string.IsNullOrEmpty(vurl))
-                jobs.Add(new Job { Url = vurl, When = when, Video = true, Path = Path.Combine(dir, day + "_" + id + "_video" + Ext(vurl, ".mp4")) });
+            {
+                string b = Path.Combine(dir, day + "_" + id + "_video"), orig = b + Ext(vurl, ".mp4");
+                jobs.Add(new Job { Url = vurl, When = when, Video = true, Orig = orig, Compact = compact, Path = compact ? b + "_720p.mp4" : orig });
+            }
         }
     }
 
@@ -853,20 +875,73 @@ class App
         return s.Length > 80 ? s.Substring(0, 80).Trim() : (s.Length == 0 ? "제목 없음" : s);
     }
 
-    // 임시 파일로 받은 뒤 이름 바꾸기 → 중간에 끊겨도 깨진 파일이 남지 않음. 파일 날짜는 글 올린 날짜로
-    static void Download(Job j)
+    // 동영상 압축은 무거워서 한 번에 하나씩
+    static readonly SemaphoreSlim videoGate = new SemaphoreSlim(1);
+
+    // 원본 그대로 저장하거나, '용량 줄여서'면 받은 뒤 사진은 WebP, 동영상은 720p MP4 로 바꿔 저장한다.
+    // 예전에 원본으로 받아 둔 파일이 있으면 다시 받지 않고 그걸로 변환한다 (원본은 그대로 둠).
+    // 변환이 안 되면 원본이라도 남긴다.
+    void Save(Job j)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(j.Path));
+        if (!j.Compact || j.Path == j.Orig) { Download(j.Url, j.Path, j.When); return; }
+        bool haveOrig = File.Exists(j.Orig);
+        string src = haveOrig ? j.Orig : j.Path + ".src" + Path.GetExtension(j.Orig);
+        if (!haveOrig) Download(j.Url, src, j.When);
         string tmp = j.Path + ".part";
-        var req = (HttpWebRequest)WebRequest.Create(j.Url);
+        try
+        {
+            if (j.Video)
+            {
+                if (!VideoCompressor.Available) throw new Exception("이 PC에서는 동영상 압축을 쓸 수 없어요");
+                if (!VideoCompressor.WorthCompressing(src)) File.Copy(src, tmp, true);   // 이미 720p 이하·저용량이면 그대로
+                else
+                {
+                    videoGate.Wait();
+                    try { VideoCompressor.Compress(src, tmp); } finally { videoGate.Release(); }
+                }
+                // 이미 작은 영상이라 더 커졌으면 원본 내용을 그대로 쓴다
+                if (new FileInfo(tmp).Length >= new FileInfo(src).Length) File.Copy(src, tmp, true);
+            }
+            else
+            {
+                if (!WebpEncoder.Available) throw new Exception("WebP 변환 도구를 찾을 수 없어요");
+                PrecacheThumb(j.Path, src);
+                WebpEncoder.Convert(src, tmp, 80f);
+            }
+            if (File.Exists(j.Path)) File.Delete(j.Path);
+            File.Move(tmp, j.Path);
+            SetTimes(j.Path, j.When);
+            lock (gate) { bytesIn += new FileInfo(src).Length; bytesOut += new FileInfo(j.Path).Length; }
+            if (!haveOrig) try { File.Delete(src); } catch { }
+        }
+        catch (Exception e)
+        {
+            try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+            if (!haveOrig) { if (File.Exists(j.Orig)) File.Delete(src); else File.Move(src, j.Orig); }
+            Log("압축하지 못해 원본으로 저장: " + Path.GetFileName(j.Orig) + " (" + e.Message + ")");
+            throw new Exception("압축 실패 · 원본으로 저장함");
+        }
+    }
+
+    // 임시 파일로 받은 뒤 이름 바꾸기 → 중간에 끊겨도 깨진 파일이 남지 않음. 파일 날짜는 글 올린 날짜로
+    static void Download(string url, string path, DateTime when)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path));
+        string tmp = path + ".part";
+        var req = (HttpWebRequest)WebRequest.Create(url);
         req.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 Edg/130.0";
         req.Referer = KnSite + "/";
         req.Timeout = 60000; req.ReadWriteTimeout = 120000;
         using (var res = req.GetResponse())
         using (var s = res.GetResponseStream())
         using (var f = File.Create(tmp)) s.CopyTo(f);
-        if (File.Exists(j.Path)) File.Delete(j.Path);
-        File.Move(tmp, j.Path);
-        if (j.When > DateTime.MinValue) try { File.SetCreationTime(j.Path, j.When); File.SetLastWriteTime(j.Path, j.When); } catch { }
+        if (File.Exists(path)) File.Delete(path);
+        File.Move(tmp, path);
+        SetTimes(path, when);
+    }
+
+    static void SetTimes(string path, DateTime when)
+    {
+        if (when > DateTime.MinValue) try { File.SetCreationTime(path, when); File.SetLastWriteTime(path, when); } catch { }
     }
 }
