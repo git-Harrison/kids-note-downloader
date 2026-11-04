@@ -36,6 +36,9 @@ header h1{font-size:17px;font-weight:750;margin:0;flex:1;letter-spacing:-.01em}
 @keyframes pulse{50%{opacity:.35}}
 
 main{flex:1;padding:4px 0 132px}
+/* 로그인 전: 카드를 화면 정가운데에 */
+body.center main{display:flex;align-items:center;padding:0 0 68px}
+body.center .hero{max-width:560px;margin:0 auto}
 .card{background:var(--card);border-radius:20px;box-shadow:var(--shadow);padding:22px 24px;margin-bottom:14px;animation:rise .35s ease both}
 @keyframes rise{from{opacity:0;transform:translateY(8px)}}
 .card h2{font-size:15px;font-weight:700;margin:0 0 14px;display:flex;align-items:center;gap:8px}
@@ -329,6 +332,7 @@ function paint() {
   pill.className = 'pill ' + (ok ? 'ok' : login === 'needed' ? '' : 'wait');
   $('pillText').textContent = ok ? '로그인됨' : login === 'needed' ? '로그인 필요' : login === 'waiting' ? '로그인 기다리는 중' : '확인 중';
   $('hero').classList.toggle('hide', !!ok);
+  document.body.classList.toggle('center', !ok);
   const btn = $('loginBtn');
   if (login === 'checking') { btn.disabled = true; btn.querySelector('span').textContent = '로그인 상태 확인 중'; }
   else if (login === 'waiting') { btn.disabled = false; btn.querySelector('span').textContent = '키즈노트 창 다시 보기'; $('heroHint').textContent = '열린 키즈노트 창에서 로그인하면 여기로 자동으로 돌아와요.'; }
