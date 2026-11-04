@@ -49,3 +49,4 @@ for ($i = 0; $i -lt $sizes.Count; $i++) {
 }
 foreach ($p in $pngs) { $bw.Write($p) }
 [IO.File]::WriteAllBytes((Join-Path $d 'app.ico'), $out.ToArray())
+[IO.File]::WriteAllBytes((Join-Path $d 'icon.png'), $pngs[0])   # 설치 화면용 256px

@@ -22,13 +22,43 @@ using System.Windows.Forms;
 static class Program
 {
     [STAThread]
-    static void Main()
+    static void Main(string[] args)
     {
+        if (args.Length > 0 && args[0] == "--uninstall") { Uninstall(); return; }
         ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
         ServicePointManager.DefaultConnectionLimit = 16;
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
         Application.Run(new MainForm());
+    }
+
+    // 설정 > 앱 에서 제거할 때 호출됨. 받은 사진은 지우지 않고, 로그인 정보·설정은 지운다.
+    static void Uninstall()
+    {
+        if (MessageBox.Show("키즈노트 다운로더를 제거할까요?\n\n받아 둔 사진과 동영상은 지워지지 않아요.\n이 PC에 남은 키즈노트 로그인 정보는 함께 지워져요.",
+            Install.Name + " 제거", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        Install.KillRunning();
+        foreach (var p in Process.GetProcessesByName("msedge"))
+        {
+            try { if (p.MainModule.FileName != null && GetCmd(p).Contains(Install.DataDir)) p.Kill(); } catch { }
+        }
+        Install.Unregister();
+        try { Directory.Delete(Install.DataDir, true); } catch { }
+        string me = Application.ExecutablePath, dir = Path.GetDirectoryName(me);
+        if (string.Equals(dir, Install.Dir, StringComparison.OrdinalIgnoreCase))
+            Process.Start(new ProcessStartInfo("cmd.exe", "/c ping -n 3 127.0.0.1 >nul & rmdir /s /q \"" + dir + "\"") { CreateNoWindow = true, UseShellExecute = false });
+        MessageBox.Show("키즈노트 다운로더를 제거했어요.", Install.Name);
+    }
+
+    static string GetCmd(Process p)
+    {
+        try
+        {
+            using (var s = new System.Management.ManagementObjectSearcher("SELECT CommandLine FROM Win32_Process WHERE ProcessId = " + p.Id))
+                foreach (System.Management.ManagementObject o in s.Get()) return (o["CommandLine"] ?? "").ToString();
+        }
+        catch { }
+        return "";
     }
 }
 
@@ -142,7 +172,7 @@ static class J
 
 class MainForm : Form
 {
-    static readonly string AppDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KidsNoteDownloader");
+    static readonly string AppDir = Install.DataDir;
     static readonly string SettingsFile = Path.Combine(AppDir, "settings.txt");
     const string KnSite = "https://www.kidsnote.com";
 
