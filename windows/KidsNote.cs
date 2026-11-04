@@ -231,7 +231,7 @@ class App
     readonly object gate = new object();
 
     // 로그인 상태: checking(확인 중) · needed(로그인 필요) · waiting(로그인 창 열림) · ok
-    string login = "checking";
+    string login = "checking", hint;
     readonly Dictionary<string, Child> kids = new Dictionary<string, Child>();
     Cdp browser, page;
     string uiTarget, knTarget;
@@ -408,23 +408,35 @@ class App
         catch { }
     }
 
-    // 사이트가 보내는 API 요청에서 아이 번호와 X-ENROLLMENT 를 엿듣는다
+    // 사이트가 보내는 요청에서 아이 번호, 기관(enrollment) 정보, API 주소를 엿듣는다
+    string apiPrefix = KnSite + "/api/v1_2", enrHeader = "X-ENROLLMENT";
+    readonly HashSet<string> seenApi = new HashSet<string>();
     void OnPageEvent(string method, Dictionary<string, object> p)
     {
         if (method != "Network.requestWillBeSent") return;
         var req = J.Obj(p, "request"); string url = J.Str(req, "url") ?? "";
-        if (!url.Contains("/api/")) return;
-        var m = Regex.Match(url, @"/children/(\d+)/");
-        string enr = null;
+        if (!Regex.IsMatch(url, @"^https?://[^/]*kidsnote\.com/", RegexOptions.IgnoreCase)) return;
+        if (Regex.IsMatch(url, @"\.(js|css|png|jpe?g|gif|svg|woff2?|ico|webp|mp4)(\?|$)", RegexOptions.IgnoreCase)) return;
         var h = J.Obj(req, "headers");
-        if (h != null) foreach (var kv in h) if (string.Equals(kv.Key, "X-ENROLLMENT", StringComparison.OrdinalIgnoreCase) && kv.Value != null) enr = kv.Value.ToString();
-        if (!m.Success || string.IsNullOrEmpty(enr)) return;
-        string id = m.Groups[1].Value;
+        // 진단용: 처음 보는 요청 모양을 기록 (숫자는 # 으로 가림)
+        string shape = Regex.Replace(Regex.Replace(url, @"\?.*$", ""), @"\d+", "#");
+        bool fresh; lock (seenApi) fresh = seenApi.Count < 40 && seenApi.Add(shape);
+        if (fresh && (shape.Contains("/api") || shape.Contains("children")))
+            Log("요청: " + shape + (h != null ? "  [헤더: " + string.Join(",", h.Keys.Where(k => k.IndexOf("enroll", StringComparison.OrdinalIgnoreCase) >= 0 || k.StartsWith("X-", StringComparison.OrdinalIgnoreCase))) + "]" : ""));
+
+        var m = Regex.Match(url, @"^(https?://[^/]+)(/[^?]*?)/children/(\d+)(/|\?|$)", RegexOptions.IgnoreCase);
+        if (!m.Success) return;
+        string enr = null;
+        if (h != null) foreach (var kv in h)
+            if (kv.Key.IndexOf("enrollment", StringComparison.OrdinalIgnoreCase) >= 0 && kv.Value != null) { enr = kv.Value.ToString(); enrHeader = kv.Key; }
+        if (enr == null) { var q = Regex.Match(url, @"[?&]enrollment(?:_id)?=(\d+)", RegexOptions.IgnoreCase); if (q.Success) enr = q.Groups[1].Value; }
+        apiPrefix = m.Groups[1].Value + m.Groups[2].Value;
+        string id = m.Groups[3].Value;
         bool first;
         lock (gate)
         {
             Child c;
-            if (kids.TryGetValue(id, out c)) { c.Enrollment = enr; return; }
+            if (kids.TryGetValue(id, out c)) { if (enr != null) c.Enrollment = enr; return; }
             first = kids.Count == 0;
             kids[id] = new Child { Id = id, Enrollment = enr };
         }
@@ -448,42 +460,48 @@ class App
         Child c; lock (gate) c = kids[id];
         try
         {
-            var pg = Api("/api/v1_2/children/" + id + "/reports/?page_size=1", c.Enrollment);
+            var pg = Api(apiPrefix + "/children/" + id + "/reports/?page_size=1", c.Enrollment);
             foreach (Dictionary<string, object> r in J.Arr(pg, "results")) { c.Name = J.Str(r, "child_name"); break; }
         }
         catch (Exception e) { Log("아이 이름을 못 가져왔어요: " + e.Message); }
     }
 
-    // 로그인 페이지에 머무르면 '로그인 필요', 벗어났는데 API 요청이 안 잡히면 알림장 화면으로 보낸다
+    // 로그인 페이지에 머무르면 '로그인 필요'. 로그인 뒤 아이 정보가 안 잡히면 알림장 화면으로 딱 한 번만 이동하고, 그 뒤엔 안내만 한다
     void WatchLogin()
     {
-        var me = page; int idle = 0;
+        var me = page; int outside = 0; bool moved = false;
         while (me != null && me.Alive && page == me)
         {
-            Thread.Sleep(1200);
+            Thread.Sleep(1500);
             lock (gate) if (kids.Count > 0) return;
             string href = null;
             try { href = me.Eval("location.href", 5000); } catch { }
             if (href == null) continue;
-            if (href.Contains("login")) { lock (gate) if (login == "checking") login = "needed"; idle = 0; continue; }
-            if (++idle == 3)
+            if (Regex.IsMatch(href, @"login|signin|auth", RegexOptions.IgnoreCase)) { lock (gate) { if (login == "checking") login = "needed"; hint = null; } outside = 0; continue; }
+            outside++;
+            if (outside == 4 && !moved && !href.Contains("/service/report"))
             {
+                moved = true;
                 try { me.Send("Page.navigate", new Dictionary<string, object> { { "url", KnSite + "/service/report" } }); } catch { }
-                idle = 0;
+            }
+            if (outside == 8)
+            {
+                lock (gate) hint = "키즈노트 창에서 '알림장'이나 '앨범' 메뉴를 한 번 눌러 주세요. 아이 정보가 잡히면 자동으로 넘어가요.";
+                Log("로그인 뒤 아이 정보를 아직 못 찾았어요 (현재 화면: " + Regex.Replace(Regex.Replace(href, @"\?.*$", ""), @"\d+", "#") + ")");
             }
         }
     }
-
     Dictionary<string, object> Api(string path, string enrollment)
     {
         var pg = page;
         if (pg == null || !pg.Alive) throw new Exception("키즈노트 창이 닫혔어요. 다시 로그인해 주세요.");
-        string expr = "(async()=>{const r=await fetch(" + J.Js.Serialize(path) + ",{credentials:'include',headers:{'Accept':'application/json','X-ENROLLMENT':" + J.Js.Serialize(enrollment) + "}});" +
+        string hdr = "'Accept':'application/json'" + (string.IsNullOrEmpty(enrollment) ? "" : "," + J.Js.Serialize(enrHeader) + ":" + J.Js.Serialize(enrollment));
+        string expr = "(async()=>{const r=await fetch(" + J.Js.Serialize(path) + ",{credentials:'include',headers:{" + hdr + "}});" +
                       "return JSON.stringify({s:r.status,t:await r.text()});})()";
         var o = J.Js.DeserializeObject(pg.Eval(expr)) as Dictionary<string, object>;
         int status = Convert.ToInt32(o["s"]);
         if (status == 401 || status == 403) { lock (gate) { login = "needed"; kids.Clear(); } throw new Exception("로그인이 풀렸어요. 다시 로그인해 주세요."); }
-        if (status != 200) throw new Exception("키즈노트 응답 " + status);
+        if (status != 200) { Log("응답 " + status + ": " + Regex.Replace(path, @"\d{3,}", "#")); throw new Exception("키즈노트 응답 " + status); }
         return J.Js.DeserializeObject((string)o["t"]) as Dictionary<string, object>;
     }
 
@@ -584,7 +602,7 @@ class App
         lock (gate)
         {
             return new Dictionary<string, object> {
-                { "login", login },
+                { "login", login }, { "hint", hint },
                 { "kids", kids.Values.Select(k => new Dictionary<string, object> { { "id", k.Id }, { "name", k.ToString() }, { "on", !cfg.SkipKids.Contains(k.Id) } }).ToList() },
                 { "cfg", new Dictionary<string, object> {
                     { "folder", cfg.Folder }, { "reports", cfg.Reports }, { "albums", cfg.Albums }, { "videos", cfg.Videos },
@@ -717,7 +735,7 @@ class App
             lock (gate) message = label + " 확인 중 · " + all.Count + "개";
             string n = J.Str(pg, "next");
             if (older || string.IsNullOrEmpty(n)) break;
-            next = n.StartsWith(KnSite) ? n.Substring(KnSite.Length) : n;
+            next = n;
         }
         Log(label + " " + all.Count + "개");
         return all;
@@ -737,13 +755,13 @@ class App
         {
             string kidDir = Path.Combine(root, Safe(c.ToString()));
             if (reports)
-                foreach (var r in ListAll("/api/v1_2/children/" + c.Id + "/reports/?page_size=100", c.Enrollment, from, c + " 알림장"))
+                foreach (var r in ListAll(apiPrefix + "/children/" + c.Id + "/reports/?page_size=100", c.Enrollment, from, c + " 알림장"))
                 {
                     if (teacherOnly && J.Str(J.Obj(r, "author"), "type") != "teacher") continue;
                     AddJobs(jobs, r, Path.Combine(kidDir, "알림장"), false, videos);
                 }
             if (albums && !stopRequested)
-                foreach (var r in ListAll("/api/v1_2/children/" + c.Id + "/albums/?page_size=100", c.Enrollment, from, c + " 앨범"))
+                foreach (var r in ListAll(apiPrefix + "/children/" + c.Id + "/albums/?page_size=100", c.Enrollment, from, c + " 앨범"))
                     AddJobs(jobs, r, Path.Combine(kidDir, "앨범"), true, videos);
         }
         if (stopRequested) return;

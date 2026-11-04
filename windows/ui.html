@@ -335,7 +335,7 @@ function paint() {
   document.body.classList.toggle('center', !ok);
   const btn = $('loginBtn');
   if (login === 'checking') { btn.disabled = true; btn.querySelector('span').textContent = '로그인 상태 확인 중'; }
-  else if (login === 'waiting') { btn.disabled = false; btn.querySelector('span').textContent = '키즈노트 창 다시 보기'; $('heroHint').textContent = '열린 키즈노트 창에서 로그인하면 여기로 자동으로 돌아와요.'; }
+  else if (login === 'waiting') { btn.disabled = false; btn.querySelector('span').textContent = '키즈노트 창 다시 보기'; $('heroHint').textContent = S.hint || '열린 키즈노트 창에서 로그인하면 여기로 자동으로 돌아와요.'; }
   else { btn.disabled = false; btn.querySelector('span').textContent = '키즈노트로 로그인'; $('heroHint').textContent = '키즈노트 공식 로그인 창이 열려요. 비밀번호는 이 프로그램에 저장되지 않아요.'; }
 
   const running = S.job.running;

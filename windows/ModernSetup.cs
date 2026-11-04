@@ -79,6 +79,7 @@ class ModernSetup : Form
     {
         using (var g = CreateGraphics()) s = g.DpiX / 96f;
         ClientSize = new Size(S(440), S(Options.Count > 0 ? 540 : 500));
+        CenterToScreen();   // 크기를 정한 뒤 다시 화면 정가운데로
         int round = 2; try { DwmSetWindowAttribute(Handle, 33, ref round, 4); } catch { }   // Windows 11 둥근 모서리
         base.OnLoad(e);
         tick.Start();

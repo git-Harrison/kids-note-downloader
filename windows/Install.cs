@@ -9,10 +9,9 @@ using Microsoft.Win32;
 static class Install
 {
     public const string Name = "키즈노트 다운로더";
-    public const string Version = "1.2.1";
+    public const string Version = "1.2.2";
     public const string ExeName = "KidsNoteDownloader.exe";
     const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\KidsNoteDownloader";
-    const string OldMsiUpgradeCode = "{6F0B8E2C-3D4A-4C61-9E57-2B8A1F3C7D90}";   // 1.0.0 (msi) 버전
 
     static string LocalAppData { get { return Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData); } }
     public static string Dir { get { return Path.Combine(LocalAppData, @"Programs\KidsNoteDownloader"); } }
@@ -25,29 +24,12 @@ static class Install
     static string DesktopLnk { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), Name + ".lnk"); } }
     public static bool Installed { get { return File.Exists(Exe); } }
 
-    [DllImport("msi.dll", CharSet = CharSet.Unicode)] static extern int MsiEnumRelatedProducts(string upgradeCode, int reserved, int index, StringBuilder productCode);
 
     public static void KillRunning()
     {
         foreach (var p in Process.GetProcessesByName(Path.GetFileNameWithoutExtension(ExeName)))
         {
             try { if (p.Id != Process.GetCurrentProcess().Id) { p.Kill(); p.WaitForExit(3000); } } catch { }
-        }
-    }
-
-    // 예전 msi 버전이 깔려 있으면 조용히 제거
-    public static void RemoveOldMsi()
-    {
-        var code = new StringBuilder(39);
-        for (int i = 0; MsiEnumRelatedProducts(OldMsiUpgradeCode, 0, i, code) == 0; i++)
-        {
-            try
-            {
-                var p = Process.Start(new ProcessStartInfo("msiexec.exe", "/x " + code + " /qn") { CreateNoWindow = true, UseShellExecute = false });
-                p.WaitForExit(60000);
-            }
-            catch { }
-            code.Clear();
         }
     }
 

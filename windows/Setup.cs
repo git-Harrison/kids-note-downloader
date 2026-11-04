@@ -44,8 +44,6 @@ static class SetupMain
         Action<float, string> say = (v, m) => { if (p != null) { p(v, m); Thread.Sleep(250); } };
         say(0.12f, "실행 중인 프로그램을 닫는 중…");
         Install.KillRunning();
-        say(0.25f, "예전 버전을 정리하는 중…");
-        Install.RemoveOldMsi();
         say(0.45f, "파일을 복사하는 중…");
         Directory.CreateDirectory(Install.Dir);
         using (var s = Assembly.GetExecutingAssembly().GetManifestResourceStream(Install.ExeName))
