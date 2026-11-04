@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 키즈노트 다운로더 설치 파일(.msi). 관리자 권한 없이 현재 사용자에게만 설치된다. -->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="키즈노트 다운로더" Language="1042" Codepage="949" Version="$(var.Version)"
+           Manufacturer="git-Harrison" UpgradeCode="6F0B8E2C-3D4A-4C61-9E57-2B8A1F3C7D90">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser" InstallPrivileges="limited"
+             Languages="1042" SummaryCodepage="949" Description="키즈노트 사진·동영상 다운로더" />
+    <MajorUpgrade DowngradeErrorMessage="더 새로운 버전이 이미 설치돼 있어요." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="app.ico" SourceFile="app.ico" />
+    <Property Id="ARPPRODUCTICON" Value="app.ico" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="LocalAppDataFolder">
+        <Directory Id="ProgramsDir" Name="Programs">
+          <Directory Id="INSTALLFOLDER" Name="KidsNoteDownloader" />
+        </Directory>
+      </Directory>
+      <Directory Id="ProgramMenuFolder" />
+      <Directory Id="DesktopFolder" />
+    </Directory>
+
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="AppComponent" Guid="A3C1E5B7-2F44-4B9D-8C1E-7D5A9B3F2E61">
+        <File Id="AppExe" Name="KidsNoteDownloader.exe" Source="out\KidsNoteDownloader.exe" />
+        <RegistryValue Root="HKCU" Key="Software\KidsNoteDownloader" Name="app" Type="integer" Value="1" KeyPath="yes" />
+        <RemoveFolder Id="RemoveInstallFolder" On="uninstall" />
+        <RemoveFolder Id="RemoveProgramsDir" Directory="ProgramsDir" On="uninstall" />
+      </Component>
+    </DirectoryRef>
+    <DirectoryRef Id="ProgramMenuFolder">
+      <Component Id="StartMenuShortcut" Guid="B8D2F6A1-4E35-4C7B-9A2D-1F6E8C4B5A73">
+        <Shortcut Id="StartShortcut" Name="키즈노트 다운로더" Target="[INSTALLFOLDER]KidsNoteDownloader.exe" WorkingDirectory="INSTALLFOLDER" Icon="app.ico" />
+        <RegistryValue Root="HKCU" Key="Software\KidsNoteDownloader" Name="startmenu" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+    <DirectoryRef Id="DesktopFolder">
+      <Component Id="DesktopShortcut" Guid="C4E7A9B2-5F16-4D8C-8B3E-2A7F9D1C6B84">
+        <Shortcut Id="DeskShortcut" Name="키즈노트 다운로더" Target="[INSTALLFOLDER]KidsNoteDownloader.exe" WorkingDirectory="INSTALLFOLDER" Icon="app.ico" />
+        <RegistryValue Root="HKCU" Key="Software\KidsNoteDownloader" Name="desktop" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <Feature Id="Main" Title="키즈노트 다운로더" Level="1">
+      <ComponentRef Id="AppComponent" />
+      <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="DesktopShortcut" />
+    </Feature>
+
+    <!-- 설치 화면: 안내·동의 → [설치] → 완료(지금 실행) -->
+    <UIRef Id="WixUI_Minimal" />
+    <WixVariable Id="WixUILicenseRtf" Value="notice.rtf" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="지금 키즈노트 다운로더 실행" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <Property Id="WixShellExecTarget" Value="[#AppExe]" />
+    <CustomAction Id="LaunchApp" BinaryKey="WixCA" DllEntry="WixShellExec" Impersonate="yes" />
+    <UI>
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchApp">WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed</Publish>
+    </UI>
+  </Product>
+</Wix>
