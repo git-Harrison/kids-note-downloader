@@ -113,7 +113,8 @@ input[type=date]:focus{outline:none;border-color:var(--accent)}
 .path{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:var(--soft)}
 .path svg{color:var(--accent)}
 .path .ghost{background:var(--card)}
-.path code{flex:1;min-width:0;font-family:var(--sans);font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
+.path input{flex:1;min-width:0;font-family:var(--sans);font-size:14px;color:var(--fg);background:transparent;border:0;outline:0;padding:6px 8px;border-radius:8px;text-overflow:ellipsis}
+.path input:focus{background:var(--card);box-shadow:0 0 0 2px var(--accent)}
 
 /* 진행 */
 .run{padding:26px}
@@ -245,7 +246,7 @@ footer .big{height:50px}
       <h2><span class="n">5</span>어디에 저장할까요</h2>
       <div class="path">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-        <code id="folder"></code>
+        <input id="folder" spellcheck="false" autocomplete="off" title="경로를 직접 입력하거나 붙여넣고 Enter">
         <button class="ghost" id="pick">변경</button>
         <button class="ghost" id="openF">열기</button>
       </div>
@@ -291,7 +292,7 @@ function paintSetup() {
   document.querySelectorAll('#range button').forEach(b => b.classList.toggle('on', b.dataset.v === cfg.range));
   $('dateRow').classList.toggle('show', cfg.range === 'custom');
   if (document.activeElement !== $('from')) $('from').value = cfg.from;
-  $('folder').textContent = cfg.folder; $('folder').title = cfg.folder;
+  if (document.activeElement !== $('folder')) $('folder').value = cfg.folder;
   document.querySelectorAll('.kid').forEach(k => {
     const on = !cfg.skip.includes(k.dataset.id);
     k.classList.toggle('on', on); k.querySelector('.ck').innerHTML = on ? CHECK : '';
@@ -395,7 +396,17 @@ $('kids').onclick = e => {
   if (i >= 0) cfg.skip.splice(i, 1); else cfg.skip.push(id);
   save();
 };
-$('pick').onclick = async () => { const f = await api('pick'); cfg.folder = f; paintSetup(); };
+// 저장 폴더: 변경 버튼(폴더 고르기 창) 또는 칸에 직접 입력 후 Enter
+function setFolder(r) {
+  if (!r || !r.folder) return;
+  const changed = r.folder !== cfg.folder;
+  cfg.folder = r.folder; if (S) S.cfg.folder = r.folder; editedAt = 0;
+  $('folder').value = r.folder;
+  if (r.error) toast(r.error); else if (changed) toast('저장 폴더를 바꿨어요');
+}
+$('pick').onclick = async () => { try { setFolder(await api('pick')); } catch (e) { toast('폴더 창을 열지 못했어요'); } };
+$('folder').onkeydown = e => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { e.target.value = cfg.folder; e.target.blur(); } };
+$('folder').onchange = async () => { const v = $('folder').value.trim(); if (!v || v === cfg.folder) { $('folder').value = cfg.folder; return; } try { setFolder(await api('folder', { path: v })); } catch (e) { toast('폴더를 바꾸지 못했어요'); $('folder').value = cfg.folder; } };
 $('openF').onclick = $('openF2').onclick = () => api('open', {});
 $('go').onclick = async () => {
   if (S.job.running) { api('stop'); $('goText').textContent = '멈추는 중…'; return; }

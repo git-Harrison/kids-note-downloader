@@ -573,8 +573,13 @@ class App
                     break;
                 case "/api/settings": ApplySettings(q); break;
                 case "/api/pick":
-                    { string p = PickFolder(); if (p != null) { cfg.Folder = p; cfg.Save(); } result = cfg.Folder; }
+                    {
+                        string p = PickFolder();
+                        Log(p == null ? "폴더 고르기: 취소" : "폴더 고르기: " + p);
+                        result = SetFolder(p);
+                    }
                     break;
+                case "/api/folder": result = SetFolder(J.Str(q, "path")); break;
                 case "/api/start": result = Start(); break;
                 case "/api/stop": stopRequested = true; break;
                 case "/api/open":
@@ -639,6 +644,33 @@ class App
     string PickFolder()
     {
         return FolderPicker.Pick(cfg.Folder, "사진을 저장할 폴더를 고르세요");
+    }
+
+    // 저장 폴더 바꾸기. 없는 폴더면 만든다. 결과로 지금 폴더(+ 실패 이유)를 돌려준다
+    Dictionary<string, object> SetFolder(string p)
+    {
+        string error = null;
+        if (!string.IsNullOrWhiteSpace(p))
+        {
+            try
+            {
+                p = Environment.ExpandEnvironmentVariables(p.Trim().Trim('"'));
+                if (!Path.IsPathRooted(p) || p.StartsWith(@"\\")) throw new Exception("D:\\사진 처럼 드라이브부터 적어 주세요");
+                p = Path.GetFullPath(p).TrimEnd('\\');
+                if (p.Length == 2) p += "\\";   // "D:" → "D:\"
+                if (!Directory.Exists(Path.GetPathRoot(p))) throw new Exception(Path.GetPathRoot(p) + " 드라이브가 없어요");
+                Directory.CreateDirectory(p);
+                lock (gate) cfg.Folder = p;
+                cfg.Save();
+                Log("저장 폴더: " + p);
+            }
+            catch (UnauthorizedAccessException) { error = "그 폴더에는 저장할 권한이 없어요"; }
+            catch (ArgumentException) { error = "폴더 경로가 올바르지 않아요"; }
+            catch (NotSupportedException) { error = "폴더 경로가 올바르지 않아요"; }
+            catch (IOException) { error = "그 폴더를 만들 수 없어요"; }
+            catch (Exception e) { error = e.Message; }
+        }
+        return new Dictionary<string, object> { { "folder", cfg.Folder }, { "error", error } };
     }
 
     // ── 다운로드 ──
