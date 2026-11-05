@@ -404,7 +404,10 @@ function setFolder(r) {
   $('folder').value = r.folder;
   if (r.error) toast(r.error); else if (changed) toast('저장 폴더를 바꿨어요');
 }
-$('pick').onclick = async () => { try { setFolder(await api('pick')); } catch (e) { toast('폴더 창을 열지 못했어요'); } };
+$('pick').onclick = async () => {
+  try { setFolder(await api('pick')); } catch (e) { toast('폴더 창을 열지 못했어요'); }
+  try { S = await api('state'); editedAt = 0; paint(); } catch (e) {}   // 서버 값으로 한 번 더 맞춘다
+};
 $('folder').onkeydown = e => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { e.target.value = cfg.folder; e.target.blur(); } };
 $('folder').onchange = async () => { const v = $('folder').value.trim(); if (!v || v === cfg.folder) { $('folder').value = cfg.folder; return; } try { setFolder(await api('folder', { path: v })); } catch (e) { toast('폴더를 바꾸지 못했어요'); $('folder').value = cfg.folder; } };
 $('openF').onclick = $('openF2').onclick = () => api('open', {});

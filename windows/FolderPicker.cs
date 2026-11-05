@@ -1,44 +1,74 @@
 using System;
-using System.Drawing;
+using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
 // 폴더 고르기 창 — 요즘 탐색기 모양(주소창에 경로 입력·붙여넣기, 새 폴더 만들기·이름 바꾸기 가능).
-// 앱 화면(Edge) 뒤에 숨지 않도록 앞으로 끌어온다.
+// 앱 화면(Edge 창)을 주인으로 삼아 띄운다: 주인 창 바로 위에 뜨고, 다른 창 뒤로 숨지 않는다.
 static class FolderPicker
 {
     static int busy;
-    static IntPtr dialogOwner;
+    public static Action<string> Log = s => { };
 
-    public static string Pick(string start, string title)
+    // 앱 쪽: 폴더 창은 별도 프로세스(같은 exe, --pick-folder)로 띄운다.
+    // 앱 안의 다른 스레드와 얽혀 창이 멈추거나 결과가 안 돌아오는 일을 원천 차단.
+    public static string Pick(string start, string title, string ownerTitle)
     {
-        // 이미 열려 있으면 새로 띄우지 않고 앞으로만
-        if (Interlocked.Exchange(ref busy, 1) == 1) { BringFront(dialogOwner); return null; }
-        string result = null;
+        if (Interlocked.Exchange(ref busy, 1) == 1)
+        {
+            IntPtr h = FindWindow("#32770", title);
+            if (h != IntPtr.Zero) SetForegroundWindow(h);
+            return null;
+        }
         try
         {
-            var t = new Thread(() =>
+            IntPtr owner = FindOwner(ownerTitle);
+            var psi = new ProcessStartInfo(Application.ExecutablePath,
+                "--pick-folder " + Quote(start ?? "") + " " + Quote(title) + " " + owner.ToInt64())
+            { UseShellExecute = false, RedirectStandardOutput = true, CreateNoWindow = true, StandardOutputEncoding = Encoding.UTF8 };
+            using (var p = Process.Start(psi))
             {
-                using (var owner = new Form { TopMost = true, ShowInTaskbar = false, FormBorderStyle = FormBorderStyle.None, Size = new Size(1, 1), StartPosition = FormStartPosition.CenterScreen, Opacity = 0 })
+                string output = p.StandardOutput.ReadToEnd();
+                p.WaitForExit();
+                foreach (var line in output.Split('\n'))
                 {
-                    owner.Show();
-                    dialogOwner = owner.Handle;
-                    BringFront(owner.Handle);
-                    try { result = Modern(owner.Handle, start, title); }
-                    catch
-                    {
-                        using (var d = new FolderBrowserDialog { SelectedPath = start, Description = title, ShowNewFolderButton = true })
-                            if (d.ShowDialog(owner) == DialogResult.OK) result = d.SelectedPath;
-                    }
-                    dialogOwner = IntPtr.Zero;
+                    string s = line.Trim();
+                    if (s.StartsWith("ok:")) return s.Substring(3);
+                    if (s.StartsWith("log:")) Log(s.Substring(4));
                 }
-            });
-            t.SetApartmentState(ApartmentState.STA); t.Start(); t.Join();
+                return null;
+            }
         }
+        catch (Exception e) { Log("폴더 창을 열 수 없어요: " + e.Message); return null; }
         finally { Interlocked.Exchange(ref busy, 0); }
-        return result;
     }
+
+    static string Quote(string s) { return "\"" + s.TrimEnd('\\').Replace("\"", "") + "\""; }
+
+    // 도우미 프로세스 쪽 (Main 에서 --pick-folder 로 호출, 메인 STA 스레드)
+    public static void HelperMain(string[] args)
+    {
+        string start = args.Length > 1 ? args[1] : "", title = args.Length > 2 ? args[2] : "폴더 고르기";
+        long ownerVal; IntPtr owner = args.Length > 3 && long.TryParse(args[3], out ownerVal) ? new IntPtr(ownerVal) : IntPtr.Zero;
+        var outp = new StreamWriter(Console.OpenStandardOutput(), new UTF8Encoding(false)) { AutoFlush = true };
+        string result = null;
+        try { result = Modern(owner, start, title); }
+        catch (Exception e)
+        {
+            outp.WriteLine("log:새 폴더 창 오류, 예전 창으로 대신: " + e.Message);
+            try
+            {
+                using (var d = new FolderBrowserDialog { SelectedPath = start, Description = title, ShowNewFolderButton = true })
+                    if (d.ShowDialog(owner == IntPtr.Zero ? null : new Owner(owner)) == DialogResult.OK) result = d.SelectedPath;
+            }
+            catch (Exception e2) { outp.WriteLine("log:폴더 창을 열 수 없어요: " + e2.Message); }
+        }
+        if (result != null) outp.WriteLine("ok:" + result);
+    }
+    class Owner : IWin32Window { readonly IntPtr h; public Owner(IntPtr h) { this.h = h; } public IntPtr Handle { get { return h; } } }
 
     static string Modern(IntPtr owner, string start, string title)
     {
@@ -57,7 +87,17 @@ static class FolderPicker
                 IShellItem si; var iid = typeof(IShellItem).GUID;
                 if (SHCreateItemFromParsingName(dir, IntPtr.Zero, ref iid, out si) == 0 && si != null) d.SetFolder(si);
             }
-            if (d.Show(owner) != 0) return null; // 취소
+            // 창이 뜨면 한 번 앞으로
+            bool shown = false;
+            var watch = new System.Threading.Timer(_ =>
+            {
+                IntPtr h = FindWindow("#32770", title);
+                if (h != IntPtr.Zero && !shown) { shown = true; SetForegroundWindow(h); }
+            }, null, 150, 300);
+            int hr;
+            try { hr = d.Show(owner); }
+            finally { watch.Dispose(); }
+            if (hr != 0) return null; // 취소
             IShellItem r; d.GetResult(out r);
             string path; r.GetDisplayName(SIGDN_FILESYSPATH, out path);
             return path;
@@ -65,28 +105,33 @@ static class FolderPicker
         finally { Marshal.ReleaseComObject(d); }
     }
 
-    // 다른 프로그램(Edge)이 앞에 있어도 이 창을 맨 앞으로
-    static void BringFront(IntPtr h)
+    // 앱 화면(Edge --app 창) 찾기: 제목이 앱 이름으로 끝나는 msedge 창
+    static IntPtr FindOwner(string ownerTitle)
     {
-        if (h == IntPtr.Zero) return;
-        IntPtr fg = GetForegroundWindow();
-        uint fgThread = GetWindowThreadProcessId(fg, IntPtr.Zero), me = GetCurrentThreadId();
-        bool attached = fgThread != 0 && fgThread != me && AttachThreadInput(me, fgThread, true);
-        SetForegroundWindow(h);
-        if (attached) AttachThreadInput(me, fgThread, false);
-        IntPtr popup = GetLastActivePopup(h);
-        if (popup != IntPtr.Zero && popup != h) SetForegroundWindow(popup);
+        IntPtr found = IntPtr.Zero;
+        if (string.IsNullOrEmpty(ownerTitle)) return found;
+        EnumWindows((h, l) =>
+        {
+            if (!IsWindowVisible(h)) return true;
+            var sb = new StringBuilder(256); GetWindowText(h, sb, 256);
+            if (!sb.ToString().EndsWith(ownerTitle)) return true;
+            uint pid; GetWindowThreadProcessId(h, out pid);
+            try { if (Process.GetProcessById((int)pid).ProcessName.Equals("msedge", StringComparison.OrdinalIgnoreCase)) { found = h; return false; } } catch { }
+            return true;
+        }, IntPtr.Zero);
+        return found;
     }
 
     const uint FOS_PICKFOLDERS = 0x20, FOS_FORCEFILESYSTEM = 0x40, FOS_PATHMUSTEXIST = 0x800;
     const uint SIGDN_FILESYSPATH = 0x80058000;
 
-    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    delegate bool EnumProc(IntPtr h, IntPtr l);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc p, IntPtr l);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindow(string cls, string title);
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
-    [DllImport("user32.dll")] static extern IntPtr GetLastActivePopup(IntPtr h);
-    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, IntPtr pid);
-    [DllImport("user32.dll")] static extern bool AttachThreadInput(uint a, uint b, bool attach);
-    [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     static extern int SHCreateItemFromParsingName(string path, IntPtr pbc, ref Guid riid, out IShellItem item);
 

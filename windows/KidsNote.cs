@@ -30,6 +30,7 @@ static class Program
     static void Main(string[] args)
     {
         if (args.Length > 0 && args[0] == "--uninstall") { Uninstall(); return; }
+        if (args.Length > 0 && args[0] == "--pick-folder") { FolderPicker.HelperMain(args); return; }
         ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
         ServicePointManager.DefaultConnectionLimit = 16;
         bool created;
@@ -643,7 +644,8 @@ class App
     // 폴더 선택 창 (화면 위에 뜨도록)
     string PickFolder()
     {
-        return FolderPicker.Pick(cfg.Folder, "사진을 저장할 폴더를 고르세요");
+        FolderPicker.Log = Log;
+        return FolderPicker.Pick(cfg.Folder, "사진을 저장할 폴더를 고르세요", Install.Name);
     }
 
     // 저장 폴더 바꾸기. 없는 폴더면 만든다. 결과로 지금 폴더(+ 실패 이유)를 돌려준다
