@@ -244,9 +244,7 @@ class App
     int total, done, fresh, skipped, failed, freshVideos;
     long bytesIn, bytesOut;   // 압축 모드: 원본 크기 합 / 저장한 크기 합
     DateTime startedAt;
-    readonly List<Dictionary<string, object>> recent = new List<Dictionary<string, object>>();
     readonly List<string> log = new List<string>();
-    readonly Dictionary<string, byte[]> thumbs = new Dictionary<string, byte[]>();
 
     DateTime lastSeen = DateTime.MinValue; bool seen, bye;
 
@@ -561,14 +559,6 @@ class App
                 res.Headers["Cache-Control"] = "no-store";
                 res.OutputStream.Write(b, 0, b.Length); return;
             }
-            if (path == "/thumb")
-            {
-                if (req.QueryString["k"] != token) { res.StatusCode = 403; return; }
-                byte[] t = Thumb(req.QueryString["p"]);
-                if (t == null) { res.StatusCode = 404; return; }
-                res.ContentType = "image/jpeg"; res.Headers["Cache-Control"] = "max-age=3600";
-                res.OutputStream.Write(t, 0, t.Length); return;
-            }
             if (!path.StartsWith("/api/") || req.Headers["X-Token"] != token) { res.StatusCode = 403; return; }
             string body; using (var r = new StreamReader(req.InputStream, Encoding.UTF8)) body = r.ReadToEnd();
             var q = body.Length > 0 ? J.Js.DeserializeObject(body) as Dictionary<string, object> : null;
@@ -625,7 +615,6 @@ class App
                     { "fresh", fresh }, { "skipped", skipped }, { "failed", failed }, { "freshVideos", freshVideos },
                     { "bytesIn", bytesIn }, { "bytesOut", bytesOut }, { "compact", cfg.Quality == "compact" },
                     { "elapsed", running ? (DateTime.Now - startedAt).TotalSeconds : 0 } } },
-                { "recent", recent.ToList() },
                 { "log", log.Skip(Math.Max(0, log.Count - 80)).ToList() },
             };
         }
@@ -652,56 +641,6 @@ class App
         return FolderPicker.Pick(cfg.Folder, "사진을 저장할 폴더를 고르세요");
     }
 
-    // 받은 사진 미리보기 (작게 줄여서)
-    byte[] Thumb(string p)
-    {
-        if (string.IsNullOrEmpty(p) || !p.StartsWith(cfg.Folder, StringComparison.OrdinalIgnoreCase) || !File.Exists(p)) return null;
-        if (!Regex.IsMatch(p, @"\.(jpe?g|png|gif|webp|bmp)$", RegexOptions.IgnoreCase)) return null;
-        lock (thumbs) { byte[] hit; if (thumbs.TryGetValue(p, out hit)) return hit; }
-        var bytes = RenderThumb(p);
-        if (bytes != null) lock (thumbs) { if (thumbs.Count > 200) thumbs.Clear(); thumbs[p] = bytes; }
-        return bytes;
-    }
-
-    // 압축 모드: WebP 는 미리보기로 못 읽어서, 변환 전 원본으로 미리보기를 만들어 둔다
-    void PrecacheThumb(string key, string source)
-    {
-        var bytes = RenderThumb(source);
-        if (bytes != null) lock (thumbs) { if (thumbs.Count > 200) thumbs.Clear(); thumbs[key] = bytes; }
-    }
-
-    static byte[] RenderThumb(string p)
-    {
-        try
-        {
-            using (var img = Image.FromFile(p))
-            {
-                // 사진 방향(EXIF) 반영
-                if (img.PropertyIdList.Contains(0x0112))
-                {
-                    int o = img.GetPropertyItem(0x0112).Value[0];
-                    if (o == 3) img.RotateFlip(RotateFlipType.Rotate180FlipNone);
-                    if (o == 6) img.RotateFlip(RotateFlipType.Rotate90FlipNone);
-                    if (o == 8) img.RotateFlip(RotateFlipType.Rotate270FlipNone);
-                }
-                int side = 360; float k = Math.Min(1f, (float)side / Math.Min(img.Width, img.Height));
-                int w = Math.Max(1, (int)(img.Width * k)), h = Math.Max(1, (int)(img.Height * k));
-                using (var bmp = new Bitmap(w, h))
-                {
-                    using (var g = Graphics.FromImage(bmp)) { g.InterpolationMode = InterpolationMode.HighQualityBicubic; g.DrawImage(img, 0, 0, w, h); }
-                    using (var ms = new MemoryStream())
-                    {
-                        var enc = ImageCodecInfo.GetImageEncoders().First(e => e.MimeType == "image/jpeg");
-                        var ep = new EncoderParameters(1); ep.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 82L);
-                        bmp.Save(ms, enc, ep);
-                        return ms.ToArray();
-                    }
-                }
-            }
-        }
-        catch { return null; }
-    }
-
     // ── 다운로드 ──
     string Start()
     {
@@ -718,7 +657,7 @@ class App
         lock (gate)
         {
             running = true; stopRequested = false; phase = "listing"; message = "목록을 확인하는 중…";
-            total = done = fresh = skipped = failed = freshVideos = 0; bytesIn = bytesOut = 0; startedAt = DateTime.Now; recent.Clear();
+            total = done = fresh = skipped = failed = freshVideos = 0; bytesIn = bytesOut = 0; startedAt = DateTime.Now;
         }
         string root = cfg.Folder; bool reports = cfg.Reports, albums = cfg.Albums, videos = cfg.Videos, teacherOnly = cfg.TeacherOnly, compact = cfg.Quality == "compact";
         DateTime? from = cfg.FromDate();
@@ -820,8 +759,6 @@ class App
                             lock (gate)
                             {
                                 fresh++; if (j.Video) freshVideos++;
-                                recent.Add(new Dictionary<string, object> { { "path", j.Path }, { "video", j.Video }, { "date", j.When.ToString("yyyy.M.d") } });
-                                if (recent.Count > 24) recent.RemoveAt(0);
                             }
                         }
                     }
