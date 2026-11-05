@@ -828,10 +828,14 @@ class App
                     catch (Exception e) { lock (gate) failed++; Log("실패: " + Path.GetFileName(j.Path) + " (" + e.Message + ")"); }
                     lock (gate) done++;
                 }
-            }) { IsBackground = true };
+            }) { IsBackground = true, Priority = ThreadPriority.BelowNormal };
             t.Start(); workers.Add(t);
         }
+        // 받는 동안 다른 작업을 방해하지 않게 우선순위를 낮춘다
+        var me = Process.GetCurrentProcess();
+        try { me.PriorityClass = ProcessPriorityClass.BelowNormal; } catch { }
         foreach (var t in workers) t.Join();
+        try { me.PriorityClass = ProcessPriorityClass.Normal; } catch { }
         Log(stopRequested ? "멈췄어요" : "끝났어요 · 새로 받음 " + fresh + " · 이미 있음 " + skipped + (failed > 0 ? " · 실패 " + failed : ""));
     }
 
@@ -884,6 +888,8 @@ class App
 
     // 동영상 압축은 무거워서 한 번에 하나씩
     static readonly SemaphoreSlim videoGate = new SemaphoreSlim(1);
+    // 사진 변환도 CPU 를 많이 먹어서 동시에 1~2장만 (받기는 4개씩 그대로)
+    static readonly SemaphoreSlim encodeGate = new SemaphoreSlim(Math.Max(1, Math.Min(2, Environment.ProcessorCount / 4)));
 
     // 원본 그대로 저장하거나, '용량 줄여서'면 받은 뒤 사진은 WebP, 동영상은 720p MP4 로 바꿔 저장한다.
     // 예전에 원본으로 받아 둔 파일이 있으면 다시 받지 않고 그걸로 변환한다 (원본은 그대로 둠).
@@ -912,8 +918,8 @@ class App
             else
             {
                 if (!WebpEncoder.Available) throw new Exception("WebP 변환 도구를 찾을 수 없어요");
-                PrecacheThumb(j.Path, src);
-                WebpEncoder.Convert(src, tmp, 80f);
+                encodeGate.Wait();
+                try { WebpEncoder.Convert(src, tmp, 80f); } finally { encodeGate.Release(); }
             }
             if (File.Exists(j.Path)) File.Delete(j.Path);
             File.Move(tmp, j.Path);
