@@ -187,7 +187,6 @@ footer .big{height:50px}
     </div>
     <div class="bar" id="bar"><i></i></div>
     <div class="stats" id="stats"></div>
-    <div class="grid" id="grid"></div>
     <details><summary><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>자세한 기록</summary><pre id="log"></pre></details>
   </section>
 
@@ -275,7 +274,7 @@ const toast = m => { const t = $('toast'); t.textContent = m; t.classList.add('s
 const CHECK = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 const RANGE = { all: '전체 기간', '1m': '최근 1개월', '3m': '최근 3개월', '1y': '최근 1년' };
 
-let S = null, cfg = null, kidsSig = '', shown = new Set(), wasRunning = false, editedAt = 0;
+let S = null, cfg = null, kidsSig = '', wasRunning = false, editedAt = 0;
 
 // 설정 바꾸면 바로 저장
 let saveT;
@@ -306,6 +305,11 @@ function paintSetup() {
     : `<b>${!kids.length ? '받을 아이를 골라 주세요' : '받을 내용을 골라 주세요'}</b>위에서 선택하면 바로 시작할 수 있어요`;
   if (!S || !S.job.running) $('go').disabled = !(kids.length && what);
 }
+// 바뀐 것만 다시 그려 깜빡임을 막는다. msg 는 앞에 로딩 표시를 계속 유지
+function setH(id, html) {
+  const el = $(id); if (id === 'msg') { const spin = S && S.job.running; let sp = el.querySelector(':scope > .spin'); if (spin && !sp) { el.innerHTML = '<span class="spin"></span><span></span>'; } else if (!spin && sp) el.innerHTML = '<span></span>'; else if (!el.lastElementChild) el.innerHTML = '<span></span>'; const t = el.lastElementChild; if (t.innerHTML !== html) t.innerHTML = html; return; }
+  if (el.innerHTML !== html) el.innerHTML = html;
+}
 const fmtB = n => n >= 1073741824 ? (n / 1073741824).toFixed(1) + 'GB' : n >= 1048576 ? (n / 1048576).toFixed(0) + 'MB' : Math.max(1, Math.round(n / 1024)) + 'KB';
 const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
@@ -326,35 +330,22 @@ function paintRun() {
   $('bar').classList.toggle('indet', listing);
   $('bar').firstElementChild.style.width = listing ? '' : (j.total ? (j.done / j.total * 100).toFixed(1) : 100) + '%';
   if (finished && j.phase === 'done') {
-    $('num').innerHTML = `${j.fresh.toLocaleString()}<small>개 새로 받았어요</small>`;
+    setH('num', `${j.fresh.toLocaleString()}<small>개 새로 받았어요</small>`);
     const saved = j.compact && j.bytesIn > 0 ? ` · 원본보다 ${Math.round((1 - j.bytesOut / j.bytesIn) * 100)}% 작게 (${fmtB(j.bytesIn)} → ${fmtB(j.bytesOut)})` : '';
     $('msg').textContent = (j.fresh ? `사진 ${(j.fresh - j.freshVideos).toLocaleString()}장${j.freshVideos ? ', 동영상 ' + j.freshVideos + '개' : ''}를 저장했어요` : '새로 올라온 사진이 없어요. 모두 받아 둔 상태예요') + saved;
   } else if (finished) {
-    $('num').innerHTML = `${j.fresh}<small>개 받음</small>`;
-    $('msg').innerHTML = j.phase === 'error' ? `<span class="err">${esc(j.message)}</span>` : '멈췄어요. 다시 시작하면 이어서 받아요';
+    setH('num', `${j.fresh}<small>개 받음</small>`);
+    setH('msg', j.phase === 'error' ? `<span class="err">${esc(j.message)}</span>` : '멈췄어요. 다시 시작하면 이어서 받아요');
   } else if (listing) {
-    $('num').innerHTML = `<span style="font-size:26px">목록 확인 중</span>`;
-    $('msg').innerHTML = `<span class="spin"></span>${esc(j.message)}`;
+    setH('num', `<span style="font-size:26px">목록 확인 중</span>`);
+    setH('msg', `${esc(j.message)}`);
   } else {
     const pct = j.total ? Math.floor(j.done / j.total * 100) : 0;
-    $('num').innerHTML = `${pct}%<small>${j.done.toLocaleString()} / ${j.total.toLocaleString()}</small>`;
+    setH('num', `${pct}%<small>${j.done.toLocaleString()} / ${j.total.toLocaleString()}</small>`);
     const rate = j.done / Math.max(1, j.elapsed), left = rate > 0 ? (j.total - j.done) / rate : 0;
-    $('msg').innerHTML = `<span class="spin"></span>사진을 받는 중${left > 5 ? ' · 약 ' + (left < 60 ? Math.ceil(left) + '초' : Math.ceil(left / 60) + '분') + ' 남음' : ''}`;
+    setH('msg', `사진을 받는 중${left > 5 ? ' · 약 ' + (left < 60 ? Math.ceil(left) + '초' : Math.ceil(left / 60) + '분') + ' 남음' : ''}`);
   }
-  $('stats').innerHTML = j.total ? `<span>새로 받음 <b>${j.fresh}</b></span><span>이미 있음 <b>${j.skipped}</b></span>${j.failed ? `<span class="err">실패 <b class="err">${j.failed}</b></span>` : ''}` : '';
-  // 방금 받은 사진
-  const g = $('grid');
-  for (const r of S.recent) {
-    if (shown.has(r.path)) continue; shown.add(r.path);
-    const a = document.createElement('a'); a.href = '#'; a.title = r.path.split('\\').pop();
-    a.innerHTML = r.video
-      ? `<div class="vid"><svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>`
-      : `<img loading="lazy" src="/thumb?k=${K}&p=${encodeURIComponent(r.path)}" alt="">`;
-    a.innerHTML += `<span>${r.date}</span>`;
-    a.onclick = e => { e.preventDefault(); api('open', { path: r.path }); };
-    g.prepend(a);
-    while (g.children.length > 18) g.lastElementChild.remove();
-  }
+  setH('stats', j.total ? `<span>새로 받음 <b>${j.fresh}</b></span><span>이미 있음 <b>${j.skipped}</b></span>${j.failed ? `<span class="err">실패 <b class="err">${j.failed}</b></span>` : ''}` : '');
   $('log').textContent = S.log.join('\n');
 }
 
@@ -408,7 +399,6 @@ $('pick').onclick = async () => { const f = await api('pick'); cfg.folder = f; p
 $('openF').onclick = $('openF2').onclick = () => api('open', {});
 $('go').onclick = async () => {
   if (S.job.running) { api('stop'); $('goText').textContent = '멈추는 중…'; return; }
-  shown.clear(); $('grid').innerHTML = '';
   const r = await api('start');
   const why = { login: '먼저 키즈노트에 로그인해 주세요', nokids: '받을 아이를 골라 주세요', nothing: '알림장이나 앨범 중 하나는 골라 주세요', folder: '저장 폴더를 만들 수 없어요' }[r];
   if (why) toast(why); else window.scrollTo({ top: 0, behavior: 'smooth' });
