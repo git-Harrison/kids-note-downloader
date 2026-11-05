@@ -649,18 +649,7 @@ class App
     // 폴더 선택 창 (화면 위에 뜨도록)
     string PickFolder()
     {
-        string result = null;
-        var t = new Thread(() =>
-        {
-            using (var owner = new Form { TopMost = true, ShowInTaskbar = false, FormBorderStyle = FormBorderStyle.None, Size = new Size(1, 1), StartPosition = FormStartPosition.CenterScreen, Opacity = 0 })
-            {
-                owner.Show(); owner.Activate();
-                using (var d = new FolderBrowserDialog { SelectedPath = cfg.Folder, Description = "사진을 저장할 폴더를 고르세요", ShowNewFolderButton = true })
-                    if (d.ShowDialog(owner) == DialogResult.OK) result = d.SelectedPath;
-            }
-        });
-        t.SetApartmentState(ApartmentState.STA); t.Start(); t.Join();
-        return result;
+        return FolderPicker.Pick(cfg.Folder, "사진을 저장할 폴더를 고르세요");
     }
 
     // 받은 사진 미리보기 (작게 줄여서)
