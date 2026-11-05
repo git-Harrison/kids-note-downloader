@@ -242,6 +242,7 @@ class App
 
     // 다운로드 상태
     volatile bool running, stopRequested;
+    static CancellationTokenSource stopCts = new CancellationTokenSource();   // 멈추기: 받기·변환 대기·동영상 변환을 바로 끊는다
     string phase = "idle", message = "";
     int total, done, fresh, skipped, failed, freshVideos;
     long bytesIn, bytesOut;   // 압축 모드: 원본 크기 합 / 저장한 크기 합
@@ -601,7 +602,7 @@ class App
                     break;
                 case "/api/folder": result = SetFolder(J.Str(q, "path")); break;
                 case "/api/start": result = Start(); break;
-                case "/api/stop": stopRequested = true; break;
+                case "/api/stop": stopRequested = true; try { stopCts.Cancel(); } catch { } break;
                 case "/api/open":
                     {
                         string p = J.Str(q, "path") ?? cfg.Folder;
@@ -710,6 +711,7 @@ class App
         lock (gate)
         {
             running = true; stopRequested = false; phase = "listing"; message = "목록을 확인하는 중…";
+            stopCts = new CancellationTokenSource(); VideoCompressor.Stop = stopCts.Token;
             total = done = fresh = skipped = failed = freshVideos = 0; bytesIn = bytesOut = 0; startedAt = DateTime.Now;
         }
         string root = cfg.Folder; bool reports = cfg.Reports, albums = cfg.Albums, videos = cfg.Videos, teacherOnly = cfg.TeacherOnly, compact = cfg.Quality == "compact";
@@ -815,7 +817,11 @@ class App
                             }
                         }
                     }
-                    catch (Exception e) { lock (gate) failed++; Log("실패: " + Path.GetFileName(j.Path) + " (" + e.Message + ")"); }
+                    catch (Exception e)
+                    {
+                        if (stopRequested) break;   // 멈추느라 끊긴 건 실패로 세지 않는다
+                        lock (gate) failed++; Log("실패: " + Path.GetFileName(j.Path) + " (" + e.Message + ")");
+                    }
                     lock (gate) done++;
                 }
             }) { IsBackground = true, Priority = ThreadPriority.BelowNormal };
@@ -886,10 +892,11 @@ class App
     // 변환이 안 되면 원본이라도 남긴다.
     void Save(Job j)
     {
-        if (!j.Compact || j.Path == j.Orig) { Download(j.Url, j.Path, j.When); return; }
+        var stop = stopCts.Token;
+        if (!j.Compact || j.Path == j.Orig) { Download(j.Url, j.Path, j.When, stop); return; }
         bool haveOrig = File.Exists(j.Orig);
         string src = haveOrig ? j.Orig : j.Path + ".src" + Path.GetExtension(j.Orig);
-        if (!haveOrig) Download(j.Url, src, j.When);
+        if (!haveOrig) Download(j.Url, src, j.When, stop);
         string tmp = j.Path + ".part";
         try
         {
@@ -899,7 +906,7 @@ class App
                 if (!VideoCompressor.WorthCompressing(src)) File.Copy(src, tmp, true);   // 이미 720p 이하·저용량이면 그대로
                 else
                 {
-                    videoGate.Wait();
+                    videoGate.Wait(stop);
                     try { VideoCompressor.Compress(src, tmp); } finally { videoGate.Release(); }
                 }
                 // 이미 작은 영상이라 더 커졌으면 원본 내용을 그대로 쓴다
@@ -908,7 +915,7 @@ class App
             else
             {
                 if (!WebpEncoder.Available) throw new Exception("WebP 변환 도구를 찾을 수 없어요");
-                encodeGate.Wait();
+                encodeGate.Wait(stop);
                 try { WebpEncoder.Convert(src, tmp, 80f); } finally { encodeGate.Release(); }
             }
             if (File.Exists(j.Path)) File.Delete(j.Path);
@@ -920,6 +927,7 @@ class App
         catch (Exception e)
         {
             try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+            if (stopRequested) { if (!haveOrig) try { File.Delete(src); } catch { } throw; }   // 멈춤: 임시 파일만 치우고 끝
             if (!haveOrig) { if (File.Exists(j.Orig)) File.Delete(src); else File.Move(src, j.Orig); }
             Log("압축하지 못해 원본으로 저장: " + Path.GetFileName(j.Orig) + " (" + e.Message + ")");
             throw new Exception("압축 실패 · 원본으로 저장함");
@@ -927,7 +935,7 @@ class App
     }
 
     // 임시 파일로 받은 뒤 이름 바꾸기 → 중간에 끊겨도 깨진 파일이 남지 않음. 파일 날짜는 글 올린 날짜로
-    static void Download(string url, string path, DateTime when)
+    static void Download(string url, string path, DateTime when, CancellationToken stop)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path));
         string tmp = path + ".part";
@@ -935,9 +943,17 @@ class App
         req.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 Edg/130.0";
         req.Referer = KnSite + "/";
         req.Timeout = 60000; req.ReadWriteTimeout = 120000;
-        using (var res = req.GetResponse())
-        using (var s = res.GetResponseStream())
-        using (var f = File.Create(tmp)) s.CopyTo(f);
+        using (stop.Register(() => { try { req.Abort(); } catch { } }))
+        {
+            try
+            {
+                using (var res = req.GetResponse())
+                using (var s = res.GetResponseStream())
+                using (var f = File.Create(tmp)) s.CopyTo(f);
+            }
+            catch { try { File.Delete(tmp); } catch { } throw; }
+        }
+        stop.ThrowIfCancellationRequested();
         if (File.Exists(path)) File.Delete(path);
         File.Move(tmp, path);
         SetTimes(path, when);

@@ -250,12 +250,23 @@ static class VideoCompressor
         }
     }
 
+    /// <summary>Set by the app per download job; cancelling it aborts a running transcode.</summary>
+    public static System.Threading.CancellationToken Stop = System.Threading.CancellationToken.None;
+
     internal static bool Await<P>(IAsyncActionWithProgress<P> op, TimeSpan timeout)
     {
         using (ManualResetEvent done = new ManualResetEvent(false))
         {
             op.Completed = delegate(IAsyncActionWithProgress<P> o, AsyncStatus s) { try { done.Set(); } catch (ObjectDisposedException) { } };
-            if (!done.WaitOne(timeout))
+            // 멈추기 누르면 변환도 바로 취소
+            int hit = WaitHandle.WaitAny(new WaitHandle[] { done, Stop.WaitHandle }, timeout);
+            if (hit == 1)
+            {
+                try { op.Cancel(); } catch { }
+                done.WaitOne(15000);
+                throw new OperationCanceledException();
+            }
+            if (hit == WaitHandle.WaitTimeout)
             {
                 try { op.Cancel(); } catch { }
                 done.WaitOne(15000); // let Media Foundation release the output file
