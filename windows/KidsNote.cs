@@ -31,6 +31,7 @@ static class Program
     {
         if (args.Length > 0 && args[0] == "--uninstall") { Uninstall(); return; }
         if (args.Length > 0 && args[0] == "--pick-folder") { FolderPicker.HelperMain(args); return; }
+        if (args.Length > 0 && args[0] == "--toast") { ProgressToast.HelperMain(args); return; }
         ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
         ServicePointManager.DefaultConnectionLimit = 16;
         bool created;
@@ -267,8 +268,11 @@ class App
         debugPort = FreePort();
         string edge = FindEdge();
         Process.Start(edge, "--remote-debugging-port=" + debugPort + " --user-data-dir=\"" + EdgeProfile + "\" --no-first-run --no-default-browser-check " +
-            "--window-size=1120,860 --app=http://127.0.0.1:" + port + "/?k=" + token);
+            "--window-size=880,720 --app=http://127.0.0.1:" + port + "/?k=" + token);
         new Thread(ConnectBrowser) { IsBackground = true }.Start();
+        // 최소화했을 때 오른쪽 아래에 뜨는 진행 알림 (별도 프로세스)
+        Process toast = null;
+        try { toast = Process.Start(new ProcessStartInfo(Application.ExecutablePath, "--toast " + port + " " + token) { UseShellExecute = false }); } catch { }
 
         // 화면이 닫히면(신호가 끊기면) 종료
         var start = DateTime.Now; IntPtr tagged = IntPtr.Zero;
@@ -286,6 +290,7 @@ class App
         try { if (browser != null && browser.Alive) browser.Send("Browser.close", null, 3000); } catch { }
         Thread.Sleep(300);
         KillProfileEdge();
+        try { if (toast != null && !toast.HasExited) toast.Kill(); } catch { }
         cfg.Save();
         try { l.Stop(); } catch { }
     }
@@ -362,6 +367,7 @@ class App
             if (wsUrl == null) throw new Exception("Edge 에 연결하지 못했어요.");
             browser = new Cdp(); browser.Connect(wsUrl);
             foreach (var t in Targets()) if ((J.Str(t, "url") ?? "").Contains("127.0.0.1:" + port)) uiTarget = J.Str(t, "id");
+            FitUiWindow();
             OpenKidsnote(true);
         }
         catch (Exception e) { lock (gate) login = "needed"; Log("오류: " + e.Message); }
@@ -407,6 +413,18 @@ class App
     {
         try { if (uiTarget != null) browser.Send("Target.activateTarget", new Dictionary<string, object> { { "targetId", uiTarget } }); } catch { }
         FocusExisting();
+    }
+
+    // Edge 가 예전 창 크기를 기억해도 앱 크기로 맞춘다
+    void FitUiWindow()
+    {
+        try
+        {
+            if (uiTarget == null) return;
+            var w = browser.Send("Browser.getWindowForTarget", new Dictionary<string, object> { { "targetId", uiTarget } });
+            browser.Send("Browser.setWindowBounds", new Dictionary<string, object> { { "windowId", w["windowId"] }, { "bounds", new Dictionary<string, object> { { "width", 880 }, { "height", 720 } } } });
+        }
+        catch { }
     }
 
     void SetWindowState(string target, string state)
@@ -563,11 +581,12 @@ class App
             if (!path.StartsWith("/api/") || req.Headers["X-Token"] != token) { res.StatusCode = 403; return; }
             string body; using (var r = new StreamReader(req.InputStream, Encoding.UTF8)) body = r.ReadToEnd();
             var q = body.Length > 0 ? J.Js.DeserializeObject(body) as Dictionary<string, object> : null;
-            lastSeen = DateTime.Now; seen = true;
+            bool peek = q != null && q.ContainsKey("peek");   // 진행 알림 창의 조회는 화면 생존 신호로 치지 않는다
+            if (!peek) { lastSeen = DateTime.Now; seen = true; }
             object result = true;
             switch (path)
             {
-                case "/api/state": bye = false; result = State(); break;
+                case "/api/state": if (!peek) bye = false; result = State(); break;
                 case "/api/bye": bye = true; break;
                 case "/api/login":
                     new Thread(() => { try { if (browser == null) return; OpenKidsnote(false); ShowKidsnote(); } catch (Exception e) { Log("오류: " + e.Message); } }) { IsBackground = true }.Start();

@@ -35,7 +35,7 @@ header h1{font-size:17px;font-weight:750;margin:0;flex:1;letter-spacing:-.01em}
 .pill.wait i{background:var(--accent);animation:pulse 1.2s infinite}
 @keyframes pulse{50%{opacity:.35}}
 
-main{flex:1;padding:4px 0 132px}
+main{flex:1 1 auto;min-height:0;overflow-y:auto;padding:4px 0 16px}
 /* 로그인 전: 카드를 화면 정가운데에 */
 body.center main{display:flex;align-items:center;padding:0 0 68px}
 body.center .hero{max-width:560px;margin:0 auto}
@@ -143,7 +143,7 @@ summary::-webkit-details-marker{display:none}
 pre{margin:8px 0 0;max-height:220px;overflow:auto;background:var(--soft);border-radius:12px;padding:12px 14px;font-size:12px;line-height:1.7;color:var(--fg-2);white-space:pre-wrap;font-family:Consolas,var(--sans)}
 
 /* 아래 고정 */
-footer{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(transparent,var(--bg) 30%);padding:28px 0 22px}
+footer{flex:none;background:var(--bg);padding:8px 0 16px}
 footer .wrap{display:flex;align-items:center;gap:16px;background:var(--card);border-radius:20px;box-shadow:0 10px 30px rgba(16,24,40,.12);padding:12px 12px 12px 22px}
 footer .sum{flex:1;min-width:0;font-size:13.5px;color:var(--fg-2);line-height:1.5}
 footer .sum b{color:var(--fg);display:block;font-size:14.5px}
