@@ -33,7 +33,7 @@ static class Program
         if (args.Length > 0 && args[0] == "--pick-folder") { FolderPicker.HelperMain(args); return; }
         if (args.Length > 0 && args[0] == "--toast") { ProgressToast.HelperMain(args); return; }
         ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-        ServicePointManager.DefaultConnectionLimit = 16;
+        ServicePointManager.DefaultConnectionLimit = 16; ServicePointManager.Expect100Continue = false;
         bool created;
         using (var m = new Mutex(true, @"Local\KidsNoteDownloader", out created))
         {
@@ -796,7 +796,7 @@ class App
         Log("받을 파일 " + jobs.Count + "개");
         var queue = new ConcurrentQueue<Job>(jobs);
         var workers = new List<Thread>();
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 8; i++)   // 받기는 8개씩 (변환 대기 중인 일꾼이 있어도 나머지가 계속 받는다)
         {
             var t = new Thread(() =>
             {
@@ -878,8 +878,8 @@ class App
 
     // 동영상 압축은 무거워서 한 번에 하나씩
     static readonly SemaphoreSlim videoGate = new SemaphoreSlim(1);
-    // 사진 변환도 CPU 를 많이 먹어서 동시에 1~2장만 (받기는 4개씩 그대로)
-    static readonly SemaphoreSlim encodeGate = new SemaphoreSlim(Math.Max(1, Math.Min(2, Environment.ProcessorCount / 4)));
+    // 사진 변환은 CPU 코어 절반까지 (2~4장 동시). 우선순위가 낮아서 다른 작업은 덜 방해한다
+    static readonly SemaphoreSlim encodeGate = new SemaphoreSlim(Math.Max(2, Math.Min(4, Environment.ProcessorCount / 2)));
 
     // 원본 그대로 저장하거나, '용량 줄여서'면 받은 뒤 사진은 WebP, 동영상은 720p MP4 로 바꿔 저장한다.
     // 예전에 원본으로 받아 둔 파일이 있으면 다시 받지 않고 그걸로 변환한다 (원본은 그대로 둠).
