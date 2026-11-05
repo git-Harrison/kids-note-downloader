@@ -39,7 +39,7 @@ class ProgressToast : Form
     ProgressToast(string port, string token)
     {
         baseUrl = "http://127.0.0.1:" + port; this.token = token;
-        FormBorderStyle = FormBorderStyle.None; ShowInTaskbar = false; TopMost = true; StartPosition = FormStartPosition.Manual;
+        FormBorderStyle = FormBorderStyle.None; ShowInTaskbar = false; StartPosition = FormStartPosition.Manual;
         Size = new Size(W, H); BackColor = Color.White; DoubleBuffered = true; Cursor = Cursors.Hand;
         var wa = Screen.PrimaryScreen.WorkingArea;
         Location = new Point(wa.Right - W - 16, wa.Bottom - H - 16);
@@ -54,7 +54,7 @@ class ProgressToast : Form
         get
         {
             var cp = base.CreateParams;
-            cp.ExStyle |= 0x08000000 /*NOACTIVATE*/ | 0x80 /*TOOLWINDOW*/ | 0x8 /*TOPMOST*/;
+            cp.ExStyle |= 0x08000000 /*NOACTIVATE*/ | 0x80 /*TOOLWINDOW*/;   // 항상 위 아님: 다른 창을 쓰면 그 아래로
             cp.ClassStyle |= 0x20000; // 그림자
             return cp;
         }
