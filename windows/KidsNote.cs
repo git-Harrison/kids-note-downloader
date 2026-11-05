@@ -752,7 +752,16 @@ class App
         string next = path;
         while (next != null && !stopRequested)
         {
-            var pg = Api(next, enrollment);
+            Dictionary<string, object> pg;
+            try { pg = Api(next, enrollment); }
+            catch (Exception e)
+            {
+                // page= 가 안 먹으면 cursor= 로 한 번 더
+                if (next == path || pageParam != "page" || !e.Message.Contains("404")) throw;
+                pageParam = "cursor";
+                next = next.Replace("page=", "cursor=");
+                pg = Api(next, enrollment);
+            }
             bool older = false;
             foreach (Dictionary<string, object> r in J.Arr(pg, "results"))
             {
@@ -762,10 +771,19 @@ class App
             lock (gate) message = label + " 확인 중 · " + all.Count + "개";
             string n = J.Str(pg, "next");
             if (older || string.IsNullOrEmpty(n)) break;
-            next = n;
+            next = NextUrl(path, n);
         }
         Log(label + " " + all.Count + "개");
         return all;
+    }
+
+    // 키즈노트는 next 에 주소 대신 커서 토큰만 준다 (예: "cD0yMDI2..."). 첫 주소에 page= 로 붙여 다음 쪽을 부른다
+    string pageParam = "page";
+    string NextUrl(string first, string next)
+    {
+        if (next.StartsWith("http", StringComparison.OrdinalIgnoreCase) || next.StartsWith("/")) return next;
+        string baseUrl = Regex.Replace(first, @"[?&](page|cursor)=[^&]*", "");
+        return baseUrl + (baseUrl.Contains("?") ? "&" : "?") + pageParam + "=" + Uri.EscapeDataString(next);
     }
 
     static DateTime CreatedAt(Dictionary<string, object> r)

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -9,7 +9,7 @@ using Microsoft.Win32;
 static class Install
 {
     public const string Name = "키즈노트 다운로더";
-    public const string Version = "1.3.0";
+    public const string Version = "1.3.1";
     public const string AppId = "GitHarrison.KidsNoteDownloader";
     public const string ExeName = "KidsNoteDownloader.exe";
     const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\KidsNoteDownloader";
